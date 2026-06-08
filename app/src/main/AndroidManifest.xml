@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- Izin Dasar dan Lanjutan -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
@@ -9,6 +10,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" />
+    <uses-permission android:name="android.permission.WRITE_SETTINGS" tools:ignore="ProtectedPermissions" />
 
     <application
         android:allowBackup="true"
@@ -16,6 +18,7 @@
         android:icon="@drawable/ic_launcher_nova"
         android:theme="@style/Theme.AppCompat.NoActionBar">
 
+        <!-- Aktivitas Utama -->
         <activity
             android:name=".MainActivity"
             android:exported="true">
@@ -25,11 +28,13 @@
             </intent-filter>
         </activity>
 
+        <!-- Layanan Floating Bubble -->
         <service
             android:name=".FloatingBubbleService"
             android:foregroundServiceType="microphone"
             android:exported="false" />
 
+        <!-- Layanan Aksesibilitas AI -->
         <service
             android:name=".ActionAssistantService"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
@@ -42,6 +47,7 @@
                 android:resource="@xml/accessibility_service_config" />
         </service>
 
+        <!-- Layanan Notifikasi -->
         <service
             android:name=".NotificationService"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
@@ -51,6 +57,7 @@
             </intent-filter>
         </service>
 
+        <!-- Administrasi Perangkat -->
         <receiver
             android:name=".DeviceAdminReceiver"
             android:permission="android.permission.BIND_DEVICE_ADMIN"
