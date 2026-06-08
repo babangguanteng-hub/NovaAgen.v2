@@ -1,6 +1,7 @@
 === PENYEBAB UTAMA MANIFEST MERGER GAGAL ===
 > Task :app:createDebugCompatibleScreenManifests
 > Task :app:extractDeepLinksDebug
+> Task :app:mergeDebugResources
 > Task :app:parseDebugLocalResources
 > Task :app:processDebugMainManifest
 > Task :app:processDebugManifest
@@ -11,28 +12,24 @@
 > Task :app:compressDebugAssets
 > Task :app:desugarDebugFileDependencies
 > Task :app:processDebugJavaRes NO-SOURCE
-> Task :app:mergeDebugJavaResource
-> Task :app:mergeDebugJniLibFolders
-> Task :app:checkDebugDuplicateClasses
-> Task :app:mergeDebugNativeLibs NO-SOURCE
 > Task :app:processDebugManifestForPackage
-> Task :app:mergeLibDexDebug
-> Task :app:stripDebugDebugSymbols NO-SOURCE
+> Task :app:checkDebugDuplicateClasses
+> Task :app:mergeDebugJavaResource
 > Task :app:processDebugResources
 > Task :app:mergeExtDexDebug
-> Task :app:validateSigningDebug
 
-> Task :app:compileDebugJavaWithJavac
-/home/runner/work/NovaAgen.v2/NovaAgen.v2/app/src/main/java/com/nova/agent/MainActivity.java:268: error: cannot find symbol
+> Task :app:compileDebugJavaWithJavac FAILED
+/home/runner/work/NovaAgen.v2/NovaAgen.v2/app/src/main/java/com/nova/agent/MainActivity.java:269: error: cannot find symbol
             if (service.getId().contains(ActionAssistantService.class.getSimpleName())) {
                                          ^
   symbol:   class ActionAssistantService
   location: class MainActivity
-/home/runner/work/NovaAgen.v2/NovaAgen.v2/app/src/main/java/com/nova/agent/MainActivity.java:305: error: cannot find symbol
-        new Handler().postDelayed(this::updateUIState, 400);
-            ^
-  symbol:   class Handler
-  location: class MainActivity
 Note: Some input files use or override a deprecated API.
 Note: Recompile with -Xlint:deprecation for details.
-2 errors
+1 error
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:compileDebugJavaWithJavac'.
+> Compilation failed; see the compiler error output for details.
