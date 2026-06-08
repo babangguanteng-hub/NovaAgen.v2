@@ -15,13 +15,11 @@ import android.os.Bundle;
 import android.util.Log;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
-import android.widget.Toast;
 import java.util.List;
 
 public class ActionAssistantService extends AccessibilityService {
     public static boolean isServiceRunning = false;
     private CommandReceiver commandReceiver;
-    private boolean isFlashlightOn = false;
 
     @Override
     protected void onServiceConnected() {
@@ -65,14 +63,12 @@ public class ActionAssistantService extends AccessibilityService {
 
     private void executeMacro(String cmdBlock) {
         try {
-            // [CMD:OPEN:nama_aplikasi] - MEMBUKA APLIKASI SECARA NYATA & LANGSUNG
             if (cmdBlock.contains("[CMD:OPEN:")) {
                 String app = extractValue(cmdBlock, "[CMD:OPEN:", "]");
                 openSmartAppDirectly(app);
                 Thread.sleep(2500); 
             }
             
-            // [CMD:TYPE:teks] - MENGETIK REALTIME GLOBAL
             if (cmdBlock.contains("[CMD:TYPE:")) {
                 String textToType = extractValue(cmdBlock, "[CMD:TYPE:", "]");
                 AccessibilityNodeInfo inputBox = waitForNodeByClassName("android.widget.EditText", 5000);
@@ -84,13 +80,11 @@ public class ActionAssistantService extends AccessibilityService {
                 }
             }
             
-            // [CMD:CLICK:teks_tombol] - KLIK TOMBOL GLOBAL BERDASARKAN TEKS
             if (cmdBlock.contains("[CMD:CLICK:")) {
                 String textToClick = extractValue(cmdBlock, "[CMD:CLICK:", "]");
                 waitForNodeAndClick(textToClick, 4000);
             }
 
-            // [CMD:TAP_COORDINATE:x,y] - KETUK KOORDINAT NYATA (PUTAR YOUTUBE / KLIK SHOPEE)
             if (cmdBlock.contains("[CMD:TAP_COORDINATE:")) {
                 String coords = extractValue(cmdBlock, "[CMD:TAP_COORDINATE:", "]");
                 String[] parts = coords.split(",");
@@ -102,16 +96,13 @@ public class ActionAssistantService extends AccessibilityService {
                 }
             }
 
-            // [CMD:SCROLL_DOWN]
             if (cmdBlock.contains("[CMD:SCROLL_DOWN]")) {
                 swipe(500, 1400, 500, 400, 350);
             }
-            // [CMD:SCROLL_UP]
             if (cmdBlock.contains("[CMD:SCROLL_UP]")) {
                 swipe(500, 400, 500, 1400, 350);
             }
 
-            // KONTROL PANEL PERANGKAT KERAS
             if (cmdBlock.contains("[CMD:FLASHLIGHT:ON]")) {
                 toggleFlashlight(true);
             }
@@ -119,7 +110,6 @@ public class ActionAssistantService extends AccessibilityService {
                 toggleFlashlight(false);
             }
             
-            // PERINTAH UTAMA SISTEM
             if (cmdBlock.contains("[CMD:HOME]")) {
                 performGlobalAction(GLOBAL_ACTION_HOME);
             }
@@ -139,7 +129,6 @@ public class ActionAssistantService extends AccessibilityService {
         } catch (Exception e) { return ""; }
     }
 
-    // MEMBUKA APLIKASI SEBENARNYA (Tanpa redirect Play Store)
     private void openSmartAppDirectly(String appNameRequested) {
         PackageManager pm = getPackageManager();
         Intent mainIntent = new Intent(Intent.ACTION_MAIN, null);
@@ -168,7 +157,6 @@ public class ActionAssistantService extends AccessibilityService {
             CameraManager camManager = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
             String cameraId = camManager.getCameraIdList()[0];
             camManager.setTorchMode(cameraId, turnOn);
-            isFlashlightOn = turnOn;
         } catch (Exception e) {
             Log.e("NovaAction", "Gagal mengontrol Senter: " + e.getMessage());
         }
@@ -224,7 +212,6 @@ public class ActionAssistantService extends AccessibilityService {
                         (nodeDesc != null && nodeDesc.toString().toLowerCase().contains(text.toLowerCase()));
                         
         if (match) {
-            // Naik ke induk jika tombolnya tidak bisa langsung diklik
             AccessibilityNodeInfo clickableNode = node;
             while (clickableNode != null && !clickableNode.isClickable()) {
                 clickableNode = clickableNode.getParent();

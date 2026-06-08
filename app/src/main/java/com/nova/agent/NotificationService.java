@@ -30,14 +30,13 @@ public class NotificationService extends NotificationListenerService {
         Bundle extras = notification.extras;
         if (extras == null) return;
 
-        String title = extras.getString(Notification.EXTRA_TITLE); // Nama Pengirim WA
-        CharSequence textChar = extras.getCharSequence(Notification.EXTRA_TEXT); // Isi Pesan
+        String title = extras.getString(Notification.EXTRA_TITLE);
+        CharSequence textChar = extras.getCharSequence(Notification.EXTRA_TEXT);
         
         if (title != null && textChar != null) {
             String message = textChar.toString();
-            Log.d("NovaNotif", "WA Masuk dari " + title + ": " + message);
+            Log.d("NovaNotif", "WA dari " + title + ": " + message);
 
-            // Kirim siaran ke Floating Bubble agar Nova membacakannya secara langsung
             Intent intent = new Intent("com.nova.agent.READ_NOTIF");
             intent.putExtra("sender", title);
             intent.putExtra("message", message);

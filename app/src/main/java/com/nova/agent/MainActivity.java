@@ -4,6 +4,7 @@ import android.app.AlertDialog;
 import android.app.admin.DevicePolicyManager;
 import android.content.ComponentName;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
@@ -54,7 +55,6 @@ public class MainActivity extends AppCompatActivity {
         subTitle.setPadding(0, 0, 0, 40);
         main.addView(subTitle);
 
-        // Panel AI Selector
         LinearLayout cardAi = createCard();
         TextView titleAi = new TextView(this); titleAi.setText("🚀 CONFIGURASI AI BRAIN"); titleAi.setTextColor(Color.WHITE); titleAi.setPadding(0,0,0,20);
         cardAi.addView(titleAi);
@@ -78,11 +78,15 @@ public class MainActivity extends AppCompatActivity {
         cardAi.addView(spinnerAiProvider);
         
         Button btnKey = createButton("🔑 PENGATURAN API KEY", 0xFF2D3748);
-        btnKey.setOnClickListener(v -> showKeyDialog());
+        btnKey.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                showKeyDialog();
+            }
+        });
         cardAi.addView(btnKey);
         main.addView(cardAi);
 
-        // PANEL STATUS PERIZINAN SUPER LENGKAP (Memenuhi Permintaan Azman!)
         LinearLayout cardStatus = createCard();
         tvStatus = new TextView(this); tvStatus.setTextSize(18); tvStatus.setGravity(Gravity.CENTER); tvStatus.setPadding(0,0,0,20);
         cardStatus.addView(tvStatus);
@@ -98,19 +102,27 @@ public class MainActivity extends AppCompatActivity {
         cardStatus.addView(tvAudioCheck); cardStatus.addView(tvOverlayCheck); cardStatus.addView(tvWriteSettingsCheck); 
         cardStatus.addView(tvAccessibilityCheck); cardStatus.addView(tvNotifCheck); cardStatus.addView(tvUsageCheck); cardStatus.addView(tvAdminCheck);
 
-        // TOMBOL-TOMBOL PERIZINAN AKTIF (Satu Kali Klik Langsung Mengarah Ke Pengaturan Sistem)
         Button btnGrantAdvanced = createButton("⚙️ AKTIFKAN SELURUH PERIZINAN", 0xFF00F5D4);
         btnGrantAdvanced.setTextColor(Color.BLACK);
-        btnGrantAdvanced.setOnClickListener(v -> showPermissionsSelectorPopup());
+        btnGrantAdvanced.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                showPermissionsSelectorPopup();
+            }
+        });
         cardStatus.addView(btnGrantAdvanced);
 
         Button btnBubble = createButton("🟣 LUNCURKAN NOVA GELEMBUNG", 0xFF6B46C1);
-        btnBubble.setOnClickListener(v -> launchNova());
+        btnBubble.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                launchNova();
+            }
+        });
         cardStatus.addView(btnBubble);
 
         main.addView(cardStatus);
 
-        // Plakat Rilis Moch Khoirul Azman
         LinearLayout footer = new LinearLayout(this);
         footer.setOrientation(LinearLayout.VERTICAL);
         footer.setGravity(Gravity.CENTER);
@@ -163,11 +175,9 @@ public class MainActivity extends AppCompatActivity {
         boolean w = Settings.System.canWrite(this) || sharedPrefs.getBoolean("BypassWriteSettings", false);
         boolean acc = ActionAssistantService.isServiceRunning;
         
-        // Cek Notifikasi
         String notifListener = Settings.Secure.getString(getContentResolver(), "enabled_notification_listeners");
         boolean n = notifListener != null && notifListener.contains(getPackageName());
 
-        // Cek Usage Stats (Akses Penggunaan)
         boolean u = false;
         try {
             android.app.AppOpsManager appOps = (android.app.AppOpsManager) getSystemService(Context.APP_OPS_SERVICE);
@@ -175,7 +185,6 @@ public class MainActivity extends AppCompatActivity {
             u = (mode == android.app.AppOpsManager.MODE_ALLOWED);
         } catch (Exception ignored) {}
 
-        // Cek Admin Perangkat
         DevicePolicyManager dpm = (DevicePolicyManager) getSystemService(Context.DEVICE_POLICY_SERVICE);
         ComponentName adminComponent = new ComponentName(this, DeviceAdminReceiver.class);
         boolean adm = dpm.isAdminActive(adminComponent);

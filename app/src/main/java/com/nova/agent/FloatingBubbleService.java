@@ -5,8 +5,10 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.ServiceInfo;
 import android.graphics.BlurMaskFilter;
@@ -50,6 +52,18 @@ public class FloatingBubbleService extends Service implements TextToSpeech.OnIni
     private final Handler mAnimHandler = new Handler(Looper.getMainLooper());
     private Runnable mAnimRunnable;
 
+    // BroadcastReceiver khusus untuk membaca Notifikasi WhatsApp masuk
+    private final BroadcastReceiver mNotifReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if ("com.nova.agent.READ_NOTIF".equals(intent.getAction())) {
+                String sender = intent.getStringExtra("sender");
+                String message = intent.getStringExtra("message");
+                speakDirectly("Pesan WhatsApp baru dari " + sender + ". Pesannya berbunyi: " + message);
+            }
+        }
+    };
+
     @Override
     public void onCreate() {
         super.onCreate();
@@ -59,6 +73,14 @@ public class FloatingBubbleService extends Service implements TextToSpeech.OnIni
             mVibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
         } catch (Exception ignored) {}
         
+        // Daftarkan Pendengar Notifikasi
+        IntentFilter filter = new IntentFilter("com.nova.agent.READ_NOTIF");
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(mNotifReceiver, filter, Context.RECEIVER_EXPORTED);
+        } else {
+            registerReceiver(mNotifReceiver, filter);
+        }
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel ch = new NotificationChannel("NovaBubble", "Nova Bubble", NotificationManager.IMPORTANCE_LOW);
             getSystemService(NotificationManager.class).createNotificationChannel(ch);
@@ -76,7 +98,7 @@ public class FloatingBubbleService extends Service implements TextToSpeech.OnIni
 
         mTTS = new TextToSpeech(this, this);
 
-        registerNotifReceiver(); mWindowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
+        mWindowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
         mBubbleView = new View(this) {
             private final Paint glowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
             private final Paint wavePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -224,12 +246,12 @@ public class FloatingBubbleService extends Service implements TextToSpeech.OnIni
     private void processCommand(String voiceCommand) {
         String provider = mSharedPrefs.getString("SelectedAiProvider", "groq");
         String apiKey = mSharedPrefs.getString("ApiKey_" + provider, "");
-        if (apiKey.isEmpty()) { speak("API Key kosong."); return; }
+        if (apiKey.isEmpty()) { speakDirectly("API Key kosong."); return; }
 
         GroqApiClient.requestAiDecision(provider, apiKey, voiceCommand, new GroqApiClient.GroqResponseCallback() {
             @Override
             public void onSuccess(String speechText, String commandCode) {
-                speak(speechText);
+                speakDirectly(speechText);
                 if (commandCode != null && !commandCode.isEmpty()) {
                     Intent intent = new Intent("com.nova.agent.EXECUTE_ACTION");
                     intent.putExtra("command_code", commandCode);
@@ -237,42 +259,24 @@ public class FloatingBubbleService extends Service implements TextToSpeech.OnIni
                     sendBroadcast(intent);
                 }
             }
-            @Override public void onError(Throwable t) { speak("Koneksi gagal."); }
+            @Override public void onError(Throwable t) { speakDirectly("Koneksi gagal."); }
         });
     }
 
-    private void speak(String text) {
+    private void speakDirectly(String text) {
         if (mTTS != null) mTTS.speak(text, TextToSpeech.QUEUE_FLUSH, null, "NovaID");
     }
 
     @Override public void onInit(int status) { if (status == TextToSpeech.SUCCESS) mTTS.setLanguage(new Locale("id", "ID")); }
     @Override public IBinder onBind(Intent intent) { return null; }
-    @Override public void onDestroy() {
+    
+    @Override 
+    public void onDestroy() {
         super.onDestroy();
         mAnimHandler.removeCallbacks(mAnimRunnable);
+        try { unregisterReceiver(mNotifReceiver); } catch (Exception ignored) {}
         try { mWindowManager.removeView(mBubbleView); } catch (Exception ignored) {}
         if (mSpeechRecognizer != null) mSpeechRecognizer.destroy();
         if (mTTS != null) mTTS.shutdown();
-    }
-}
-
-// Pendengar Notifikasi WhatsApp secara Real-time untuk dibacakan oleh Nova Bubble
-private final android.content.BroadcastReceiver mNotifReceiver = new android.content.BroadcastReceiver() {
-    @Override
-    public void onReceive(Context context, Intent intent) {
-        if ("com.nova.agent.READ_NOTIF".equals(intent.getAction())) {
-            String sender = intent.getStringExtra("sender");
-            String message = intent.getStringExtra("message");
-            speakDirectly("Pesan WhatsApp baru dari " + sender + ". Pesannya berbunyi: " + message);
-        }
-    }
-};
-
-private void registerNotifReceiver() {
-    IntentFilter filter = new IntentFilter("com.nova.agent.READ_NOTIF");
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        registerReceiver(mNotifReceiver, filter, Context.RECEIVER_EXPORTED);
-    } else {
-        registerReceiver(mNotifReceiver, filter);
     }
 }
