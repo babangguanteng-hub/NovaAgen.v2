@@ -1,350 +1,157 @@
 package com.nova.agent;
-import android.os.Handler;
 
-import android.Manifest;
-import android.accessibilityservice.AccessibilityServiceInfo;
+import android.app.AlertDialog;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
-import android.graphics.Color;
-import android.graphics.Typeface;
-import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
-import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.provider.Settings;
-import android.text.InputType;
 import android.view.Gravity;
 import android.view.View;
-import android.view.accessibility.AccessibilityManager;
+import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
-import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
-
-import androidx.annotation.NonNull;
-import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
-import java.util.List;
-
-/**
- * MainActivity mengelola tampilan dashboard kontrol Nova Agent.
- * Bertanggung jawab terhadap:
- * 1. Pengecekan perizinan sistem (Aksesibilitas, Overlay, Rekam Audio, Tulis Setelan).
- * 2. Menyimpan Groq API Key secara aman ke SharedPreferences melalui Dialog Material.
- * 3. Mengontrol siklus hidup FloatingBubbleService.
- */
 public class MainActivity extends AppCompatActivity {
 
-    private static final int REQUEST_CODE_AUDIO = 201;
-    private static final int REQUEST_CODE_OVERLAY = 202;
-    private static final int REQUEST_CODE_WRITE_SETTINGS = 203;
+    private TextView tvStatus;
+    private TextView tvAudioCheck;
+    private TextView tvOverlayCheck;
+    private TextView tvWriteSettingsCheck;
+    private TextView tvAccessibilityCheck;
+    private Button btnFloatingBubble;
+    private Button btnAccessibility;
+    private Button btnApiKey;
 
-    private SharedPreferences mSharedPreferences;
-    private TextView mStatusTextView;
-    private TextView mPermissionSummaryView;
-    private Button mToggleServiceBtn;
-    private Button mSetupKeyBtn;
-    private Button mAccessibilityBtn;
+    private SharedPreferences sharedPrefs;
+    private static final String PREFS_NAME = "NovaAgentPrefs";
+    private static final String KEY_BYPASS_WRITE_SETTINGS = "BypassWriteSettings";
+    private static final String KEY_API_KEY = "GroqApiKey";
+    private static final int REQ_AUDIO_PERMISSION = 101;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        mSharedPreferences = getSharedPreferences("NovaPrefs", MODE_PRIVATE);
+        sharedPrefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
 
-        // Membangun antarmuka secara dinamis dengan tema Dark Purple & Neon Magenta
-        setContentView(buildContentView());
-
-        updateUIState();
-    }
-
-    private View buildContentView() {
+        // Membangun Antarmuka Pengguna Secara Programmatic & Dinamis (Aman dari Masalah Layout XML)
         ScrollView scrollView = new ScrollView(this);
-        scrollView.setLayoutParams(new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
-        scrollView.setBackgroundColor(Color.parseColor("#090216")); // Sangat Gelap Violet
         scrollView.setFillViewport(true);
+        scrollView.setBackgroundColor(0xFF0F0E17); // Dark Purple Background
 
-        LinearLayout mainContainer = new LinearLayout(this);
-        mainContainer.setOrientation(LinearLayout.VERTICAL);
-        mainContainer.setPadding(50, 80, 50, 80);
-        mainContainer.setGravity(Gravity.CENTER_HORIZONTAL);
+        LinearLayout mainLayout = new LinearLayout(this);
+        mainLayout.setOrientation(LinearLayout.VERTICAL);
+        mainLayout.setPadding(40, 60, 40, 60);
+        mainLayout.setGravity(Gravity.CENTER_HORIZONTAL);
 
-        // Title Header
-        TextView titleText = new TextView(this);
-        titleText.setText("NOVA AGENT");
-        titleText.setTextColor(Color.parseColor("#D433FF")); // Neon Pink/Magenta
-        titleText.setTextSize(34);
-        titleText.setTypeface(Typeface.create("sans-serif-black", Typeface.BOLD));
-        titleText.setGravity(Gravity.CENTER);
-        mainContainer.addView(titleText);
+        // Header
+        TextView tvTitle = new TextView(this);
+        tvTitle.setText("NOVA AGENT");
+        tvTitle.setTextSize(32);
+        tvTitle.setTextColor(0xFFD53F8C); // Pink Magenta Neon
+        tvTitle.setGravity(Gravity.CENTER);
+        tvTitle.setPaintFlags(tvTitle.getPaintFlags() | android.graphics.Paint.UNDERLINE_TEXT_FLAG);
+        mainLayout.addView(tvTitle);
 
-        // Subtitle
-        TextView subtitleText = new TextView(this);
-        subtitleText.setText("AI Background Assistant & Device Automator");
-        subtitleText.setTextColor(Color.parseColor("#9D66FF")); // Soft Violet
-        subtitleText.setTextSize(14);
-        subtitleText.setPadding(0, 8, 0, 60);
-        subtitleText.setGravity(Gravity.CENTER);
-        mainContainer.addView(subtitleText);
+        TextView tvSub = new TextView(this);
+        tvSub.setText("AI Background Assistant & Device Automator");
+        tvSub.setTextSize(14);
+        tvSub.setTextColor(0xFF9F7AEA); // Light Purple
+        tvSub.setGravity(Gravity.CENTER);
+        tvSub.setPadding(0, 10, 0, 50);
+        mainLayout.addView(tvSub);
 
-        // CARD PANEL 1: STATUS & KONTROL UTAMA
-        LinearLayout statusCard = new LinearLayout(this);
-        statusCard.setOrientation(LinearLayout.VERTICAL);
-        statusCard.setBackground(createCardBackground());
-        statusCard.setPadding(45, 45, 45, 45);
-        LinearLayout.LayoutParams cardParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        cardParams.setMargins(0, 0, 0, 40);
-        statusCard.setLayoutParams(cardParams);
-
-        mStatusTextView = new TextView(this);
-        mStatusTextView.setText("Status Layanan: Memeriksa...");
-        mStatusTextView.setTextColor(Color.WHITE);
-        mStatusTextView.setTextSize(16);
-        mStatusTextView.setTypeface(Typeface.DEFAULT_BOLD);
-        mStatusTextView.setGravity(Gravity.CENTER_HORIZONTAL);
-        mStatusTextView.setPadding(0, 0, 0, 15);
-        statusCard.addView(mStatusTextView);
-
-        mPermissionSummaryView = new TextView(this);
-        mPermissionSummaryView.setText("Memeriksa status izin sistem...");
-        mPermissionSummaryView.setTextColor(Color.parseColor("#B0A8C0"));
-        mPermissionSummaryView.setTextSize(13);
-        mPermissionSummaryView.setLineSpacing(5, 1.1f);
-        mPermissionSummaryView.setPadding(0, 0, 0, 30);
-        statusCard.addView(mPermissionSummaryView);
-
-        mToggleServiceBtn = new Button(this);
-        mToggleServiceBtn.setText("AKTIFKAN FLOATING BUBBLE");
-        mToggleServiceBtn.setTextColor(Color.WHITE);
-        mToggleServiceBtn.setBackground(createButtonBackground("#651FFF")); // Deep Indigo Neon
-        mToggleServiceBtn.setTypeface(Typeface.DEFAULT_BOLD);
-        mToggleServiceBtn.setPadding(0, 30, 0, 30);
-        mToggleServiceBtn.setOnClickListener(v -> handleFloatingServiceToggle());
-        statusCard.addView(mToggleServiceBtn);
-
-        mAccessibilityBtn = new Button(this);
-        mAccessibilityBtn.setText("AKTIFKAN LAYANAN AKSESIBILITAS");
-        mAccessibilityBtn.setTextColor(Color.BLACK);
-        mAccessibilityBtn.setBackground(createButtonBackground("#00FFC2")); // Neon Teal Cyan
-        mAccessibilityBtn.setTypeface(Typeface.DEFAULT_BOLD);
-        mAccessibilityBtn.setPadding(0, 30, 0, 30);
-        LinearLayout.LayoutParams accessParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        accessParams.setMargins(0, 20, 0, 0);
-        mAccessibilityBtn.setLayoutParams(accessParams);
-        mAccessibilityBtn.setOnClickListener(v -> launchAccessibilitySettings());
-        statusCard.addView(mAccessibilityBtn);
-
-        mainContainer.addView(statusCard);
-
-        // CARD PANEL 2: INTEGRASI API KEY
-        LinearLayout configCard = new LinearLayout(this);
-        configCard.setOrientation(LinearLayout.VERTICAL);
-        configCard.setBackground(createCardBackground());
-        configCard.setPadding(45, 45, 45, 45);
-        configCard.setLayoutParams(cardParams);
-
-        TextView apiTitle = new TextView(this);
-        apiTitle.setText("Konfigurasi API AI");
-        apiTitle.setTextColor(Color.WHITE);
-        apiTitle.setTextSize(16);
-        apiTitle.setTypeface(Typeface.DEFAULT_BOLD);
-        apiTitle.setPadding(0, 0, 0, 10);
-        configCard.addView(apiTitle);
-
-        TextView apiDesc = new TextView(this);
-        apiDesc.setText("Nova Agent membutuhkan kunci otentikasi Groq API Key untuk memproses instruksi suara.");
-        apiDesc.setTextColor(Color.parseColor("#8E84A3"));
-        apiDesc.setTextSize(12);
-        apiDesc.setPadding(0, 0, 0, 30);
-        configCard.addView(apiDesc);
-
-        mSetupKeyBtn = new Button(this);
-        mSetupKeyBtn.setText("PENGATURAN GROQ API KEY");
-        mSetupKeyBtn.setTextColor(Color.WHITE);
-        mSetupKeyBtn.setBackground(createButtonBackground("#2A1E4A")); // Dark Slate
-        mSetupKeyBtn.setTypeface(Typeface.DEFAULT_BOLD);
-        mSetupKeyBtn.setPadding(0, 30, 0, 30);
-        mSetupKeyBtn.setOnClickListener(v -> showApiKeyDialog());
-        configCard.addView(mSetupKeyBtn);
-
-        mainContainer.addView(configCard);
-        scrollView.addView(mainContainer);
-
-        return scrollView;
-    }
-
-    private GradientDrawable createCardBackground() {
-        GradientDrawable drawable = new GradientDrawable();
-        drawable.setShape(GradientDrawable.RECTANGLE);
-        drawable.setColor(Color.parseColor("#130927")); // Card Background Violet
-        drawable.setCornerRadius(28f);
-        drawable.setStroke(3, Color.parseColor("#28164A")); // Glow Border
-        return drawable;
-    }
-
-    private GradientDrawable createButtonBackground(String hexColor) {
-        GradientDrawable drawable = new GradientDrawable();
-        drawable.setShape(GradientDrawable.RECTANGLE);
-        drawable.setColor(Color.parseColor(hexColor));
-        drawable.setCornerRadius(20f);
-        return drawable;
-    }
-
-    /**
-     * Memperbarui informasi UI berdasarkan status layanan dan izin yang dimiliki ponsel.
-     */
-    private void updateUIState() {
-        boolean isServiceActive = FloatingBubbleService.isRunning();
+        // CARD 1: STATUS DAN IZIN
+        LinearLayout cardStatus = createCard();
         
-        if (isServiceActive) {
-            mStatusTextView.setText("Status Layanan: BUBBLE AKTIF");
-            mStatusTextView.setTextColor(Color.parseColor("#00FFC2"));
-            mToggleServiceBtn.setText("MATIKAN FLOATING BUBBLE");
-            mToggleServiceBtn.setBackground(createButtonBackground("#FF2E93")); // Neon Magenta-Red
-        } else {
-            mStatusTextView.setText("Status Layanan: TIDAK AKTIF");
-            mStatusTextView.setTextColor(Color.parseColor("#9D66FF"));
-            mToggleServiceBtn.setText("AKTIFKAN FLOATING BUBBLE");
-            mToggleServiceBtn.setBackground(createButtonBackground("#651FFF"));
-        }
+        tvStatus = new TextView(this);
+        tvStatus.setText("Status Layanan: TIDAK AKTIF");
+        tvStatus.setTextSize(18);
+        tvStatus.setTextColor(0xFFE2E8F0);
+        tvStatus.setGravity(Gravity.CENTER);
+        tvStatus.setPadding(0, 0, 0, 30);
+        cardStatus.addView(tvStatus);
 
-        // Susun laporan ringkasan izin yang tersisa
-        StringBuilder summary = new StringBuilder();
-        boolean allPassed = true;
+        tvAudioCheck = createCheckItem(" Izin Rekam Audio");
+        tvOverlayCheck = createCheckItem(" Izin Overlay Jendela");
+        tvWriteSettingsCheck = createCheckItem(" Izin Menulis Pengaturan / Kecerahan");
+        tvAccessibilityCheck = createCheckItem(" Layanan Aksesibilitas");
 
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            summary.append("❌ Izin Rekam Audio (Dibutuhkan)\n");
-            allPassed = false;
-        } else {
-            summary.append("✅ Izin Rekam Audio (Disetujui)\n");
-        }
+        cardStatus.addView(tvAudioCheck);
+        cardStatus.addView(tvOverlayCheck);
+        cardStatus.addView(tvWriteSettingsCheck);
+        cardStatus.addView(tvAccessibilityCheck);
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
-            summary.append("❌ Izin Overlay Jendela / Diatas Aplikasi Lain (Dibutuhkan)\n");
-            allPassed = false;
-        } else {
-            summary.append("✅ Izin Overlay Jendela (Disetujui)\n");
-        }
+        // Spacing sebelum tombol
+        View spacing = new View(this);
+        spacing.setMinimumHeight(30);
+        cardStatus.addView(spacing);
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.System.canWrite(this)) {
-            summary.append("❌ Izin Menulis Pengaturan / Kecerahan (Dibutuhkan)\n");
-            allPassed = false;
-        } else {
-            summary.append("✅ Izin Menulis Pengaturan (Disetujui)\n");
-        }
-
-        if (!isAccessibilityServiceRunning()) {
-            summary.append("❌ Layanan Aksesibilitas Nova Agent (Dibutuhkan)\n");
-            mAccessibilityBtn.setVisibility(View.VISIBLE);
-            allPassed = false;
-        } else {
-            summary.append("✅ Layanan Aksesibilitas (Aktif)\n");
-            mAccessibilityBtn.setVisibility(View.GONE);
-        }
-
-        mPermissionSummaryView.setText(summary.toString().trim());
-        if (allPassed) {
-            mPermissionSummaryView.setTextColor(Color.parseColor("#00FFC2"));
-        } else {
-            mPermissionSummaryView.setTextColor(Color.parseColor("#B0A8C0"));
-        }
-    }
-
-    private boolean isAccessibilityServiceRunning() {
-        AccessibilityManager manager = (AccessibilityManager) getSystemService(Context.ACCESSIBILITY_SERVICE);
-        if (manager == null) return false;
-        List<AccessibilityServiceInfo> services = manager.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_GENERIC);
-        for (AccessibilityServiceInfo service : services) {
-            if (service.getId().contains(ActionAssistantService.class.getSimpleName())) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private void handleFloatingServiceToggle() {
-        // Alur Validasi Izin 1: Rekam Audio
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.RECORD_AUDIO}, REQUEST_CODE_AUDIO);
-            return;
-        }
-
-        // Alur Validasi Izin 2: Overlay Jendela
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
-            Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + getPackageName()));
-            startActivityForResult(intent, REQUEST_CODE_OVERLAY);
-            return;
-        }
-
-        // Alur Validasi Izin 3: Tulis Pengaturan Sistem
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.System.canWrite(this)) {
-            Intent intent = new Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS, Uri.parse("package:" + getPackageName()));
-            startActivityForResult(intent, REQUEST_CODE_WRITE_SETTINGS);
-            return;
-        }
-
-        // Eksekusi Layanan
-        Intent serviceIntent = new Intent(this, FloatingBubbleService.class);
-        if (FloatingBubbleService.isRunning()) {
-            stopService(serviceIntent);
-        } else {
-            ContextCompat.startForegroundService(this, serviceIntent);
-        }
-
-        // Tunda pembaruan UI sebentar agar siklus siklus hidup terikat
-        new Handler(android.os.Looper.getMainLooper()).postDelayed(this::updateUIState, 400);
-    }
-
-    private void launchAccessibilitySettings() {
-        Intent intent = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
-        startActivity(intent);
-        Toast.makeText(this, "Aktifkan 'Nova Agent' dari menu Aksesibilitas.", Toast.LENGTH_LONG).show();
-    }
-
-    /**
-     * Menampilkan Dialog Material Input API Key.
-     */
-    private void showApiKeyDialog() {
-        AlertDialog.Builder builder = new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert);
-        builder.setTitle("Pengaturan Groq API Key");
-
-        LinearLayout layout = new LinearLayout(this);
-        layout.setOrientation(LinearLayout.VERTICAL);
-        layout.setPadding(40, 20, 40, 20);
-
-        final EditText input = new EditText(this);
-        input.setHint("Masukkan Kunci Api (gsk_...)");
-        input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
-        input.setTextColor(Color.WHITE);
-        String currentKey = mSharedPreferences.getString("groq_api_key", "");
-        input.setText(currentKey);
-
-        layout.addView(input);
-        builder.setView(layout);
-
-        builder.setPositiveButton("Simpan", new DialogInterface.OnClickListener() {
+        btnFloatingBubble = createButton("AKTIFKAN FLOATING BUBBLE", 0xFF6B46C1); // Purple Button
+        btnFloatingBubble.setOnClickListener(new View.OnClickListener() {
             @Override
-            public void onClick(DialogInterface dialog, int which) {
-                String key = input.getText().toString().trim();
-                mSharedPreferences.edit().putString("groq_api_key", key).apply();
-                Toast.makeText(MainActivity.this, "Kunci API berhasil disimpan!", Toast.LENGTH_SHORT).show();
-                updateUIState();
+            public void onClick(View v) {
+                handleFloatingBubbleClick();
             }
         });
+        cardStatus.addView(btnFloatingBubble);
 
-        builder.setNegativeButton("Batal", (dialog, which) -> dialog.cancel());
-        builder.show();
+        btnAccessibility = createButton("AKTIFKAN LAYANAN AKSESIBILITAS", 0xFF00F5D4); // Teal Button
+        btnAccessibility.setTextColor(0xFF0F0E17);
+        btnAccessibility.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
+            }
+        });
+        cardStatus.addView(btnAccessibility);
+
+        mainLayout.addView(cardStatus);
+
+        // CARD 2: KONFIGURASI API
+        LinearLayout cardApi = createCard();
+        TextView tvApiTitle = new TextView(this);
+        tvApiTitle.setText("Konfigurasi API AI");
+        tvApiTitle.setTextSize(18);
+        tvApiTitle.setTextColor(0xFFE2E8F0);
+        tvApiTitle.setPadding(0, 0, 0, 15);
+        cardApi.addView(tvApiTitle);
+
+        TextView tvApiDesc = new TextView(this);
+        tvApiDesc.setText("Nova Agent membutuhkan kunci otentikasi Groq API Key untuk memproses instruksi suara Anda.");
+        tvApiDesc.setTextSize(13);
+        tvApiDesc.setTextColor(0xFFA0AEC0);
+        tvApiDesc.setPadding(0, 0, 0, 30);
+        cardApi.addView(tvApiDesc);
+
+        btnApiKey = createButton("PENGATURAN GROQ API KEY", 0xFF2D3748); // Dark Grey Button
+        btnApiKey.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                showApiKeyInputDialog();
+            }
+        });
+        cardApi.addView(btnApiKey);
+
+        mainLayout.addView(cardApi);
+
+        scrollView.addView(mainLayout);
+        setContentView(scrollView);
+
+        // Lakukan pembaruan indikator berkala di UI
+        new Handler(Looper.getMainLooper()).postDelayed(this::updateUIState, 500);
     }
 
     @Override
@@ -353,23 +160,194 @@ public class MainActivity extends AppCompatActivity {
         updateUIState();
     }
 
-    @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == REQUEST_CODE_AUDIO) {
-            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                handleFloatingServiceToggle();
-            } else {
-                Toast.makeText(this, "Aplikasi membutuhkan izin Mikrofon untuk mendeteksi perintah suara.", Toast.LENGTH_LONG).show();
-            }
+    private LinearLayout createCard() {
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setBackgroundColor(0xFF1A1D24); // Dark Card BG
+        card.setPadding(40, 40, 40, 40);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        params.setMargins(0, 0, 0, 40);
+        card.setLayoutParams(params);
+        return card;
+    }
+
+    private TextView createCheckItem(String text) {
+        TextView tv = new TextView(this);
+        tv.setText("❌" + text + " (Dibutuhkan)");
+        tv.setTextSize(14);
+        tv.setTextColor(0xFFA0AEC0);
+        tv.setPadding(0, 10, 0, 10);
+        return tv;
+    }
+
+    private Button createButton(String text, int color) {
+        Button btn = new Button(this);
+        btn.setText(text);
+        btn.setBackgroundColor(color);
+        btn.setTextColor(0xFFFFFFFF);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        params.setMargins(0, 15, 0, 15);
+        btn.setLayoutParams(params);
+        return btn;
+    }
+
+    // Fungsi Utama: Memperbarui Seluruh Logika Status Izin
+    private void updateUIState() {
+        boolean audioGranted = ContextCompat.checkSelfPermission(this, android.Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED;
+        boolean overlayGranted = Settings.canDrawOverlays(this);
+        boolean writeSettingsGranted = Settings.System.canWrite(this) || sharedPrefs.getBoolean(KEY_BYPASS_WRITE_SETTINGS, false);
+        boolean accessibilityActive = isAccessibilityServiceEnabled(this, ActionAssistantService.class);
+
+        // Update indikator teks Rekam Audio
+        if (audioGranted) {
+            tvAudioCheck.setText("✅ Izin Rekam Audio (Disetujui)");
+            tvAudioCheck.setTextColor(0xFF48BB78);
+        } else {
+            tvAudioCheck.setText("❌ Izin Rekam Audio (Dibutuhkan)");
+            tvAudioCheck.setTextColor(0xFFE53E3E);
+        }
+
+        // Update indikator teks Overlay
+        if (overlayGranted) {
+            tvOverlayCheck.setText("✅ Izin Overlay Jendela (Disetujui)");
+            tvOverlayCheck.setTextColor(0xFF48BB78);
+        } else {
+            tvOverlayCheck.setText("❌ Izin Overlay Jendela (Dibutuhkan)");
+            tvOverlayCheck.setTextColor(0xFFE53E3E);
+        }
+
+        // Update indikator teks Menulis Pengaturan
+        if (writeSettingsGranted) {
+            tvWriteSettingsCheck.setText("✅ Izin Menulis Pengaturan / Kecerahan (Disetujui)");
+            tvWriteSettingsCheck.setTextColor(0xFF48BB78);
+        } else {
+            tvWriteSettingsCheck.setText("❌ Izin Menulis Pengaturan / Kecerahan (Dibutuhkan)");
+            tvWriteSettingsCheck.setTextColor(0xFFE53E3E);
+        }
+
+        // Update indikator teks Aksesibilitas
+        if (accessibilityActive) {
+            tvAccessibilityCheck.setText("✅ Layanan Aksesibilitas (Aktif)");
+            tvAccessibilityCheck.setTextColor(0xFF48BB78);
+        } else {
+            tvAccessibilityCheck.setText("❌ Layanan Aksesibilitas (Dibutuhkan)");
+            tvAccessibilityCheck.setTextColor(0xFFE53E3E);
+        }
+
+        // Status Layanan Utama
+        if (audioGranted && overlayGranted && writeSettingsGranted && accessibilityActive) {
+            tvStatus.setText("Status Layanan: AKTIF & SIAP");
+            tvStatus.setTextColor(0xFF48BB78); // Green
+        } else {
+            tvStatus.setText("Status Layanan: TIDAK AKTIF");
+            tvStatus.setTextColor(0xFFE53E3E); // Red
         }
     }
 
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == REQUEST_CODE_OVERLAY || requestCode == REQUEST_CODE_WRITE_SETTINGS) {
-            updateUIState();
+    // Mengambil tindakan saat tombol Aktifkan Gelembung diklik
+    private void handleFloatingBubbleClick() {
+        // 1. Periksa izin Rekam Audio terlebih dahulu
+        if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[]{android.Manifest.permission.RECORD_AUDIO}, REQ_AUDIO_PERMISSION);
+            return;
         }
+
+        // 2. Periksa izin Overlay Jendela
+        if (!Settings.canDrawOverlays(this)) {
+            showOverlayPermissionExplanationDialog();
+            return;
+        }
+
+        // 3. Periksa izin Menulis Pengaturan (Tantangan Infinix Android Go Anda)
+        if (!Settings.System.canWrite(this) && !sharedPrefs.getBoolean(KEY_BYPASS_WRITE_SETTINGS, false)) {
+            showWriteSettingsPopupDialog();
+            return;
+        }
+
+        // Jika semua izin terpenuhi, jalankan Floating Bubble!
+        Intent intent = new Intent(this, FloatingBubbleService.class);
+        startService(intent);
+        Toast.makeText(this, "Nova Agent Floating Bubble diaktifkan!", Toast.LENGTH_SHORT).show();
+    }
+
+    // 🌟 POPUP POPULER: Dialog Edukatif Pengatur Kecerahan/Sistem (Safeguard Android Go)
+    private void showWriteSettingsPopupDialog() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("🛡️ Izin Sistem Diperlukan");
+        builder.setMessage("Nova Agent memerlukan izin 'Mengubah Setelan Sistem' agar asisten AI bisa mengatur kecerahan layar atau volume secara langsung.\n\n" +
+                "⚠️ INFORMASI ANDROID GO:\n" +
+                "Karena perangkat Infinix Anda menggunakan Android Go Edition, sistem operasi kemungkinan mengunci izin ini (sakelar berwarna abu-abu).\n\n" +
+                "Apa yang ingin Anda lakukan?");
+
+        // Pilihan 1: Jalur Resmi (Mencoba membuka halaman setelan sistem)
+        builder.setPositiveButton("Buka Setelan", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                Intent intent = new Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS);
+                intent.setData(Uri.parse("package:" + getPackageName()));
+                startActivity(intent);
+            }
+        });
+
+        // Pilihan 2: Jalur Penyelamat Android Go (Abaikan & aktifkan secara aman!)
+        builder.setNegativeButton("Abaikan (Android Go)", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                sharedPrefs.edit().putBoolean(KEY_BYPASS_WRITE_SETTINGS, true).apply();
+                updateUIState();
+                Toast.makeText(MainActivity.this, "Izin dilewati dengan aman untuk Android Go!", Toast.LENGTH_LONG).show();
+                
+                // Coba jalankan ulang floating bubble sekarang setelah izin dilewati
+                handleFloatingBubbleClick();
+            }
+        });
+
+        builder.setNeutralButton("Batal", null);
+        
+        AlertDialog dialog = builder.create();
+        dialog.show();
+    }
+
+    private void showOverlayPermissionExplanationDialog() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("Izin Hamparan Jendela");
+        builder.setMessage("Nova Agent membutuhkan izin untuk menampilkan bola melayang di atas aplikasi lain. Silakan aktifkan izin 'Tampilkan di atas aplikasi lain' di halaman berikutnya.");
+        builder.setPositiveButton("Buka Setelan", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + getPackageName()));
+                startActivity(intent);
+            }
+        });
+        builder.setNegativeButton("Batal", null);
+        builder.show();
+    }
+
+    private void showApiKeyInputDialog() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("Pengaturan Groq API Key");
+        
+        final EditText input = new EditText(this);
+        input.setHint("Masukkan API Key Groq Anda...");
+        input.setText(sharedPrefs.getString(KEY_API_KEY, ""));
+        builder.setView(input);
+
+        builder.setPositiveButton("Simpan", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                String key = input.getText().toString().trim();
+                sharedPrefs.edit().putString(KEY_API_KEY, key).apply();
+                Toast.makeText(MainActivity.this, "API Key berhasil disimpan!", Toast.LENGTH_SHORT).show();
+            }
+        });
+        builder.setNegativeButton("Batal", null);
+        builder.show();
+    }
+
+    private boolean isAccessibilityServiceEnabled(Context context, Class<?> serviceClass) {
+        String prefString = Settings.Secure.getString(context.getContentResolver(), Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
+        return prefString != null && prefString.contains(context.getPackageName() + "/" + serviceClass.getName());
     }
 }
