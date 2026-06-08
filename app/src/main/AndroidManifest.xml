@@ -9,7 +9,7 @@
         android:allowBackup="true"
         android:label="Nova Agent"
         android:icon="@drawable/ic_launcher_nova"
-        android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
+        android:theme="@style/Theme.AppCompat.NoActionBar">
 
         <activity
             android:name=".MainActivity"
