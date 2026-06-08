@@ -1,0 +1,38 @@
+=== PENYEBAB UTAMA MANIFEST MERGER GAGAL ===
+> Task :app:createDebugCompatibleScreenManifests
+> Task :app:extractDeepLinksDebug
+> Task :app:parseDebugLocalResources
+> Task :app:processDebugMainManifest
+> Task :app:processDebugManifest
+> Task :app:mergeDebugShaders
+> Task :app:compileDebugShaders NO-SOURCE
+> Task :app:generateDebugAssets UP-TO-DATE
+> Task :app:mergeDebugAssets
+> Task :app:compressDebugAssets
+> Task :app:desugarDebugFileDependencies
+> Task :app:processDebugJavaRes NO-SOURCE
+> Task :app:mergeDebugJniLibFolders
+> Task :app:checkDebugDuplicateClasses
+> Task :app:mergeDebugJavaResource
+> Task :app:mergeDebugNativeLibs NO-SOURCE
+> Task :app:processDebugManifestForPackage
+> Task :app:stripDebugDebugSymbols NO-SOURCE
+> Task :app:mergeLibDexDebug
+> Task :app:mergeExtDexDebug
+> Task :app:processDebugResources
+> Task :app:validateSigningDebug
+
+> Task :app:compileDebugJavaWithJavac
+/home/runner/work/NovaAgen.v2/NovaAgen.v2/app/src/main/java/com/nova/agent/FloatingBubbleService.java:33: error: cannot find symbol
+import com.nova.agent.api.GroqApiClient;
+                         ^
+  symbol:   class GroqApiClient
+  location: package com.nova.agent.api
+/home/runner/work/NovaAgen.v2/NovaAgen.v2/app/src/main/java/com/nova/agent/FloatingBubbleService.java:300: error: package GroqApiClient does not exist
+        GroqApiClient.requestAiDecision(mApiKey, voiceCommand, new GroqApiClient.GroqResponseCallback() {
+                                                                                ^
+/home/runner/work/NovaAgen.v2/NovaAgen.v2/app/src/main/java/com/nova/agent/FloatingBubbleService.java:301: error: method does not override or implement a method from a supertype
+            @Override
+            ^
+/home/runner/work/NovaAgen.v2/NovaAgen.v2/app/src/main/java/com/nova/agent/FloatingBubbleService.java:313: error: method does not override or implement a method from a supertype
+            @Override
