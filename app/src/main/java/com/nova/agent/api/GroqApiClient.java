@@ -12,116 +12,98 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 
-/**
- * MULTI-AI CLIENT SDK
- * Dikembangkan secara mandiri menggunakan HttpURLConnection murni 
- * agar sangat stabil di HP Android Go, bebas dari error dependensi DEX.
- */
 public class GroqApiClient {
-    private static final String TAG = "MultiAiClient";
-
     public interface GroqResponseCallback {
-        void onSuccess(String aiResponseText);
+        void onSuccess(String aiResponseText, String extractedCommand);
         void onError(Throwable throwable);
     }
 
-    public static void requestAiDecision(String provider, String apiKey, String prompt, final GroqResponseCallback callback) {
-        final Handler mainHandler = new Handler(Looper.getMainLooper());
+    // PROMPT RAHASIA UNTUK KONTROL HP (Inilah yang membuat Nova Pintar!)
+    private static final String SYSTEM_PROMPT = 
+        "Kamu adalah NOVA AI, asisten virtual Android super cerdas buatan 'Moch Khoirul Azman'. " +
+        "Berikan jawaban verbal yang sangat singkat dan natural. " +
+        "PENTING: Jika user meminta untuk membuka aplikasi, mencari video, atau melakukan aksi di HP, " +
+        "kamu WAJIB menyisipkan KODE PERINTAH di bagian PALING AKHIR jawabanmu (jangan dibacakan). " +
+        "Daftar Kode: " +
+        "- Buka aplikasi: [CMD:OPEN:nama_aplikasi] " +
+        "- Cari Youtube: [CMD:YOUTUBE:kata_kunci] " +
+        "- Cari Shopee: [CMD:SHOPEE:kata_kunci] " +
+        "- Kembali ke Home: [CMD:HOME] " +
+        "Contoh: User: 'Nova tolong carikan lagu peterpan di youtube'. Jawabanmu: 'Baik Bos Azman, membuka Youtube untuk mencari lagu Peterpan. [CMD:YOUTUBE:lagu peterpan]'.";
 
+    public static void requestAiDecision(String provider, String apiKey, String userPrompt, final GroqResponseCallback callback) {
+        final Handler mainHandler = new Handler(Looper.getMainLooper());
         new Thread(() -> {
             try {
-                String targetUrl = "";
-                String jsonPayload = "";
-                String authorizationHeader = "Bearer " + apiKey;
-                boolean isGemini = "gemini".equalsIgnoreCase(provider);
-
+                String targetUrl = "https://api.groq.com/openai/v1/chat/completions";
+                String model = "llama-3.1-8b-instant";
+                
                 if ("gemini".equalsIgnoreCase(provider)) {
-                    // Google Gemini 2.5/1.5 Flash Endpoint
-                    targetUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + apiKey;
-                    JSONObject contentObj = new JSONObject();
-                    JSONArray partsArray = new JSONArray();
-                    partsArray.put(new JSONObject().put("text", prompt));
-                    contentObj.put("parts", partsArray);
-                    
-                    JSONObject root = new JSONObject();
-                    root.put("contents", new JSONArray().put(contentObj));
-                    jsonPayload = root.toString();
+                    targetUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" + apiKey;
                 } else if ("openrouter".equalsIgnoreCase(provider)) {
-                    // OpenRouter Llama 3 Free Endpoint
                     targetUrl = "https://openrouter.ai/api/v1/chat/completions";
-                    JSONObject message = new JSONObject().put("role", "user").put("content", prompt);
+                    model = "meta-llama/llama-3-8b-instruct:free";
+                }
+
+                String jsonPayload;
+                if ("gemini".equalsIgnoreCase(provider)) {
+                    JSONObject sysInst = new JSONObject().put("parts", new JSONArray().put(new JSONObject().put("text", SYSTEM_PROMPT)));
+                    JSONObject contentObj = new JSONObject().put("parts", new JSONArray().put(new JSONObject().put("text", userPrompt)));
                     jsonPayload = new JSONObject()
-                            .put("model", "meta-llama/llama-3-8b-instruct:free")
-                            .put("messages", new JSONArray().put(message))
+                            .put("systemInstruction", sysInst)
+                            .put("contents", new JSONArray().put(contentObj))
                             .toString();
                 } else {
-                    // Default: Groq Llama 3.1 Instant Endpoint
-                    targetUrl = "https://api.groq.com/openai/v1/chat/completions";
-                    JSONObject message = new JSONObject().put("role", "user").put("content", prompt);
-                    jsonPayload = new JSONObject()
-                            .put("model", "llama-3.1-8b-instant")
-                            .put("messages", new JSONArray().put(message))
-                            .toString();
+                    JSONArray msgs = new JSONArray();
+                    msgs.put(new JSONObject().put("role", "system").put("content", SYSTEM_PROMPT));
+                    msgs.put(new JSONObject().put("role", "user").put("content", userPrompt));
+                    jsonPayload = new JSONObject().put("model", model).put("messages", msgs).toString();
                 }
 
                 URL url = new URL(targetUrl);
                 HttpURLConnection conn = (HttpURLConnection) url.openConnection();
                 conn.setRequestMethod("POST");
                 conn.setRequestProperty("Content-Type", "application/json");
-                
-                if (!isGemini) {
-                    conn.setRequestProperty("Authorization", authorizationHeader);
+                if (!"gemini".equalsIgnoreCase(provider)) {
+                    conn.setRequestProperty("Authorization", "Bearer " + apiKey);
                 }
-
                 conn.setDoOutput(true);
-                conn.setConnectTimeout(10000);
-                conn.setReadTimeout(10000);
 
                 try (OutputStream os = conn.getOutputStream()) {
                     byte[] input = jsonPayload.getBytes(StandardCharsets.UTF_8);
                     os.write(input, 0, input.length);
                 }
 
-                int code = conn.getResponseCode();
-                if (code == 200) {
+                if (conn.getResponseCode() == 200) {
                     BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8));
                     StringBuilder response = new StringBuilder();
                     String line;
-                    while ((line = br.readLine()) != null) {
-                        response.append(line.trim());
-                    }
+                    while ((line = br.readLine()) != null) response.append(line.trim());
 
-                    String responseString = response.toString();
                     String reply = "";
-
-                    if (isGemini) {
-                        // Parsing Respon Gemini
-                        JSONObject resJson = new JSONObject(responseString);
-                        reply = resJson.getJSONArray("candidates")
-                                .getJSONObject(0)
-                                .getJSONObject("content")
-                                .getJSONArray("parts")
-                                .getJSONObject(0)
-                                .getString("text");
+                    if ("gemini".equalsIgnoreCase(provider)) {
+                        reply = new JSONObject(response.toString()).getJSONArray("candidates").getJSONObject(0).getJSONObject("content").getJSONArray("parts").getJSONObject(0).getString("text");
                     } else {
-                        // Parsing Respon OpenAI (Groq / OpenRouter)
-                        JSONObject resJson = new JSONObject(responseString);
-                        reply = resJson.getJSONArray("choices")
-                                .getJSONObject(0)
-                                .getJSONObject("message")
-                                .getString("content");
+                        reply = new JSONObject(response.toString()).getJSONArray("choices").getJSONObject(0).getJSONObject("message").getString("content");
                     }
 
-                    final String finalReply = reply;
-                    mainHandler.post(() -> callback.onSuccess(finalReply));
+                    // EKSTRAKSI KODE PERINTAH [CMD:...]
+                    String extractedCmd = null;
+                    String cleanSpeech = reply;
+                    java.util.regex.Matcher m = java.util.regex.Pattern.compile("\\[CMD:.*?\\]").matcher(reply);
+                    if (m.find()) {
+                        extractedCmd = m.group();
+                        cleanSpeech = reply.replace(extractedCmd, "").trim(); // Hapus kode agar tidak dibacakan TTS
+                    }
+
+                    final String finalSpeech = cleanSpeech;
+                    final String finalCmd = extractedCmd;
+                    mainHandler.post(() -> callback.onSuccess(finalSpeech, finalCmd));
                 } else {
-                    final String errorMsg = "API Error Kode: " + code;
-                    mainHandler.post(() -> callback.onError(new Exception(errorMsg)));
+                    mainHandler.post(() -> callback.onError(new Exception("Error API Kode: " + conn.getResponseCode())));
                 }
-                conn.disconnect();
             } catch (Exception e) {
-                Log.e(TAG, "Gagal koneksi AI: ", e);
-                mainHandler.post(() -> callback.onError(new Exception("Koneksi internet bermasalah.")));
+                mainHandler.post(() -> callback.onError(new Exception("Koneksi gagal.")));
             }
         }).start();
     }
