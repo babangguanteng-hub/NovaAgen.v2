@@ -76,7 +76,7 @@ public class FloatingBubbleService extends Service implements TextToSpeech.OnIni
 
         mTTS = new TextToSpeech(this, this);
 
-        mWindowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
+        registerNotifReceiver(); mWindowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
         mBubbleView = new View(this) {
             private final Paint glowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
             private final Paint wavePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -253,5 +253,26 @@ public class FloatingBubbleService extends Service implements TextToSpeech.OnIni
         try { mWindowManager.removeView(mBubbleView); } catch (Exception ignored) {}
         if (mSpeechRecognizer != null) mSpeechRecognizer.destroy();
         if (mTTS != null) mTTS.shutdown();
+    }
+}
+
+// Pendengar Notifikasi WhatsApp secara Real-time untuk dibacakan oleh Nova Bubble
+private final android.content.BroadcastReceiver mNotifReceiver = new android.content.BroadcastReceiver() {
+    @Override
+    public void onReceive(Context context, Intent intent) {
+        if ("com.nova.agent.READ_NOTIF".equals(intent.getAction())) {
+            String sender = intent.getStringExtra("sender");
+            String message = intent.getStringExtra("message");
+            speakDirectly("Pesan WhatsApp baru dari " + sender + ". Pesannya berbunyi: " + message);
+        }
+    }
+};
+
+private void registerNotifReceiver() {
+    IntentFilter filter = new IntentFilter("com.nova.agent.READ_NOTIF");
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        registerReceiver(mNotifReceiver, filter, Context.RECEIVER_EXPORTED);
+    } else {
+        registerReceiver(mNotifReceiver, filter);
     }
 }

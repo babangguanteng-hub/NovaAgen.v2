@@ -4,9 +4,11 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
-    <uses-permission android:name="android.permission.VIBRATE" /> <!-- FIX CRASH SENTUHAN -->
+    <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.CAMERA" /> <!-- Untuk Flashlight -->
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" /> <!-- Akses Penggunaan -->
 
     <application
         android:allowBackup="true"
@@ -28,7 +30,7 @@
             android:foregroundServiceType="microphone"
             android:exported="false" />
 
-        <!-- Layanan Aksesibilitas dengan Konfigurasi yang Benar -->
+        <!-- Layanan Aksesibilitas Global -->
         <service
             android:name=".ActionAssistantService"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
@@ -40,6 +42,29 @@
                 android:name="android.accessibilityservice"
                 android:resource="@xml/accessibility_service_config" />
         </service>
+
+        <!-- Layanan Pembaca Notifikasi Global -->
+        <service
+            android:name=".NotificationService"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
+        <!-- Penerima Admin Perangkat -->
+        <receiver
+            android:name=".DeviceAdminReceiver"
+            android:permission="android.permission.BIND_DEVICE_ADMIN"
+            android:exported="true">
+            <meta-data
+                android:name="android.app.device_admin"
+                android:resource="@xml/device_admin_receiver" />
+            <intent-filter>
+                <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
+            </intent-filter>
+        </receiver>
 
     </application>
 </manifest>
