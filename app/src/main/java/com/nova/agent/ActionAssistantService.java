@@ -6,10 +6,10 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.graphics.Path;
 import android.hardware.camera2.CameraManager;
-import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
@@ -51,7 +51,7 @@ public class ActionAssistantService extends AccessibilityService {
     private class CommandReceiver extends BroadcastReceiver {
         @Override
         public void onReceive(Context context, Intent intent) {
-            String aiCommand = intent.getStringExtra("command_code");
+            final String aiCommand = intent.getStringExtra("command_code");
             if (aiCommand == null) return;
             
             new Thread(new Runnable() {
