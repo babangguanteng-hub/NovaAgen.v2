@@ -20,17 +20,14 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    # Kita jalankan compile secara langsung dan menyaring pesan "error:" agar langsung terlihat
     - name: Pasang Gradle dan Rakit APK
       uses: gradle/actions/setup-gradle@v3
       with:
         gradle-version: '8.4'
-        arguments: assembleDebug --no-daemon --info
-      continue-on-error: true
+        arguments: assembleDebug --no-daemon --stacktrace
 
-    # Perintah khusus untuk mencari tulisan "error" atau "FAILED" di baris program Java Anda
-    - name: Tampilkan Baris Error Kode Secara Jelas
-      run: |
-        echo "=== HASIL PEMINDAIAN ERROR KODE ==="
-        find app/src/ -name "*.java" -o -name "*.xml" | xargs grep -n "error" || echo "Pindai manual file Java selesai."
-        echo "==================================="
+    - name: Simpan dan Unggah Berkas APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: NovaAgent-Debug-APK
+        path: app/build/outputs/apk/debug/app-debug.apk
