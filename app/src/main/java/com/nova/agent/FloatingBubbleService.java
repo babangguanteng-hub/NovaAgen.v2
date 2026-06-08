@@ -57,7 +57,6 @@ public class FloatingBubbleService extends Service implements TextToSpeech.OnIni
         mSharedPrefs = getSharedPreferences("NovaAgentPrefs", MODE_PRIVATE);
         mVibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
         
-        // Setup Foreground Service
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel ch = new NotificationChannel("NovaBubble", "Nova Bubble", NotificationManager.IMPORTANCE_LOW);
             getSystemService(NotificationManager.class).createNotificationChannel(ch);
@@ -90,27 +89,23 @@ public class FloatingBubbleService extends Service implements TextToSpeech.OnIni
 
                 mAnimOffset += 0.04f;
 
-                // 1. Bola Cahaya Latar (Aurora Glow)
-                // Jika sedang mendengar (mIsListening), ubah warna menjadi Merah Menyala
-                int colorOuter = mIsListening ? 0xFFFF0055 : 0xFF8A2BE2; // Red vs BlueViolet
-                int colorInner = mIsListening ? 0xFFFF5555 : 0xFFD02090; // LightRed vs VioletRed
+                int colorOuter = mIsListening ? 0xFFFF0055 : 0xFF8A2BE2;
+                int colorInner = mIsListening ? 0xFFFF5555 : 0xFFD02090;
 
                 glowPaint.setShader(new RadialGradient(cx, cy, baseRadius + 15f,
                         new int[]{colorInner, colorOuter, Color.TRANSPARENT},
                         null, Shader.TileMode.CLAMP));
                 canvas.drawCircle(cx, cy, baseRadius + 15f, glowPaint);
 
-                // 2. Gelombang Energi (Sine Wave) yang melingkar
                 wavePaint.setStyle(Paint.Style.STROKE);
                 wavePaint.setStrokeWidth(3f);
-                wavePaint.setColor(mIsListening ? 0xFFFFFFFF : 0xFF00F5D4); // White or Neon Cyan
+                wavePaint.setColor(mIsListening ? 0xFFFFFFFF : 0xFF00F5D4);
                 wavePaint.setMaskFilter(new BlurMaskFilter(4f, BlurMaskFilter.Blur.SOLID));
                 
                 wavePath.reset();
                 int numPoints = 60;
                 for (int i = 0; i <= numPoints; i++) {
                     float angle = (float) (i * 2 * Math.PI / numPoints);
-                    // Matematika gelombang referensi gambar
                     float wave = (float) Math.sin(angle * 5 + mAnimOffset * 3) * 12f; 
                     float r = baseRadius + wave;
                     float x = cx + r * (float) Math.cos(angle);
@@ -121,7 +116,6 @@ public class FloatingBubbleService extends Service implements TextToSpeech.OnIni
                 wavePath.close();
                 canvas.drawPath(wavePath, wavePaint);
 
-                // 3. Teks Identitas Azman
                 textPaint.setTextAlign(Paint.Align.CENTER);
                 textPaint.setFakeBoldText(true);
                 textPaint.setShadowLayer(5f, 0, 0, Color.BLACK);
@@ -146,7 +140,7 @@ public class FloatingBubbleService extends Service implements TextToSpeech.OnIni
             @Override
             public void run() {
                 mBubbleView.invalidate();
-                mAnimHandler.postDelayed(this, 30); // ~30fps smooth animation
+                mAnimHandler.postDelayed(this, 30);
             }
         };
         mAnimHandler.post(mAnimRunnable);
@@ -187,35 +181,37 @@ public class FloatingBubbleService extends Service implements TextToSpeech.OnIni
 
     private void startListening() {
         mIsListening = true;
-        // FIX BUG BENTROK: Tidak ada lagi suara "Sedang mendengar". Diganti dengan Getaran Haptic!
         if (mVibrator != null) mVibrator.vibrate(50);
-        if (mTTS != null) mTTS.stop(); // Hentikan ocehan AI jika masih ngoceh
+        if (mTTS != null) mTTS.stop();
         
-        new Handler(Looper.getMainLooper()).post(() -> {
-            try {
-                if (mSpeechRecognizer != null) mSpeechRecognizer.destroy();
-                mSpeechRecognizer = SpeechRecognizer.createSpeechRecognizer(this);
-                Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
-                intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
-                intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "id-ID");
+        new Handler(Looper.getMainLooper()).post(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    if (mSpeechRecognizer != null) mSpeechRecognizer.destroy();
+                    mSpeechRecognizer = SpeechRecognizer.createSpeechRecognizer(FloatingBubbleService.this);
+                    Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+                    intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+                    intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "id-ID");
 
-                mSpeechRecognizer.setRecognitionListener(new RecognitionListener() {
-                    @Override public void onReadyForSpeech(Bundle p) {}
-                    @Override public void onBeginningOfSpeech() {}
-                    @Override public void onRmsChanged(float r) {}
-                    @Override public void onBufferReceived(byte[] b) {}
-                    @Override public void onEndOfSpeech() { mIsListening = false; }
-                    @Override public void onError(int e) { mIsListening = false; }
-                    @Override public void onResults(Bundle results) {
-                        mIsListening = false;
-                        ArrayList<String> matches = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
-                        if (matches != null && !matches.isEmpty()) processCommand(matches.get(0));
-                    }
-                    @Override public void onPartialResults(Bundle p) {}
-                    @Override public void onEvent(int e, Bundle p) {}
-                });
-                mSpeechRecognizer.startListening(intent);
-            } catch (Exception e) { mIsListening = false; }
+                    mSpeechRecognizer.setRecognitionListener(new RecognitionListener() {
+                        @Override public void onReadyForSpeech(Bundle p) {}
+                        @Override public void onBeginningOfSpeech() {}
+                        @Override public void onRmsChanged(float r) {}
+                        @Override public void onBufferReceived(byte[] b) {}
+                        @Override public void onEndOfSpeech() { mIsListening = false; }
+                        @Override public void onError(int e) { mIsListening = false; }
+                        @Override public void onResults(Bundle results) {
+                            mIsListening = false;
+                            ArrayList<String> matches = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+                            if (matches != null && !matches.isEmpty()) processCommand(matches.get(0));
+                        }
+                        @Override public void onPartialResults(Bundle p) {}
+                        @Override public void onEvent(int e, Bundle p) {}
+                    });
+                    mSpeechRecognizer.startListening(intent);
+                } catch (Exception e) { mIsListening = false; }
+            }
         });
     }
 
@@ -234,7 +230,6 @@ public class FloatingBubbleService extends Service implements TextToSpeech.OnIni
             public void onSuccess(String speechText, String commandCode) {
                 speak(speechText);
                 if (commandCode != null) {
-                    // Kirim perintah eksekusi layar ke ActionAssistantService
                     Intent intent = new Intent("com.nova.agent.EXECUTE_ACTION");
                     intent.putExtra("command_code", commandCode);
                     intent.setPackage(getPackageName());

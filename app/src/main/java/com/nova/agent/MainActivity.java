@@ -2,9 +2,11 @@ package com.nova.agent;
 
 import android.app.AlertDialog;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
@@ -29,17 +31,16 @@ public class MainActivity extends AppCompatActivity {
         sharedPrefs = getSharedPreferences("NovaAgentPrefs", Context.MODE_PRIVATE);
 
         ScrollView scroll = new ScrollView(this);
-        scroll.setBackgroundColor(0xFF0A0A12); // Deep Space Black
+        scroll.setBackgroundColor(0xFF0A0A12);
 
         LinearLayout main = new LinearLayout(this);
         main.setOrientation(LinearLayout.VERTICAL);
         main.setPadding(40, 60, 40, 60);
 
-        // Header Super Elegan
         TextView title = new TextView(this);
         title.setText("NOVA AI");
         title.setTextSize(40);
-        title.setTextColor(0xFF00F5D4); // Neon Cyan
+        title.setTextColor(0xFF00F5D4);
         title.setGravity(Gravity.CENTER);
         title.setTypeface(null, android.graphics.Typeface.BOLD);
         title.setShadowLayer(10, 0, 0, 0xFF00F5D4);
@@ -52,7 +53,6 @@ public class MainActivity extends AppCompatActivity {
         subTitle.setPadding(0, 0, 0, 40);
         main.addView(subTitle);
 
-        // Card Engine AI
         LinearLayout cardAi = createCard();
         TextView titleAi = new TextView(this); titleAi.setText("🚀 MESIN KECERDASAN (AI)"); titleAi.setTextColor(Color.WHITE); titleAi.setPadding(0,0,0,20);
         cardAi.addView(titleAi);
@@ -76,11 +76,15 @@ public class MainActivity extends AppCompatActivity {
         cardAi.addView(spinnerAiProvider);
         
         Button btnKey = createButton("🔑 MASUKKAN API KEY", 0xFF2D3748);
-        btnKey.setOnClickListener(v -> showKeyDialog());
+        btnKey.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                showKeyDialog();
+            }
+        });
         cardAi.addView(btnKey);
         main.addView(cardAi);
 
-        // Card Status Sistem
         LinearLayout cardStatus = createCard();
         tvStatus = new TextView(this); tvStatus.setTextSize(18); tvStatus.setGravity(Gravity.CENTER); tvStatus.setPadding(0,0,0,20);
         cardStatus.addView(tvStatus);
@@ -90,16 +94,25 @@ public class MainActivity extends AppCompatActivity {
         cardStatus.addView(tvAudioCheck); cardStatus.addView(tvOverlayCheck); cardStatus.addView(tvWriteSettingsCheck); cardStatus.addView(tvAccessibilityCheck);
 
         Button btnBubble = createButton("🟣 LUNCURKAN NOVA", 0xFF6B46C1);
-        btnBubble.setOnClickListener(v -> launchNova());
+        btnBubble.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                launchNova();
+            }
+        });
         cardStatus.addView(btnBubble);
 
         Button btnAcs = createButton("⚙️ AKTIFKAN KONTROL LAYAR", 0xFF00F5D4);
         btnAcs.setTextColor(0xFF000000);
-        btnAcs.setOnClickListener(v -> startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)));
+        btnAcs.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
+            }
+        });
         cardStatus.addView(btnAcs);
         main.addView(cardStatus);
 
-        // Footer Plakat Rilis Moch Khoirul Azman
         LinearLayout footer = new LinearLayout(this);
         footer.setOrientation(LinearLayout.VERTICAL);
         footer.setGravity(Gravity.CENTER);
@@ -125,8 +138,7 @@ public class MainActivity extends AppCompatActivity {
         scroll.addView(main);
         setContentView(scroll);
 
-        // Loop UI Update Realtime
-        Handler h = new Handler(Looper.getMainLooper());
+        final Handler h = new Handler(Looper.getMainLooper());
         h.post(new Runnable() {
             @Override public void run() { updateUI(); h.postDelayed(this, 1000); }
         });
@@ -151,7 +163,6 @@ public class MainActivity extends AppCompatActivity {
         boolean a = ContextCompat.checkSelfPermission(this, android.Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED;
         boolean o = Settings.canDrawOverlays(this);
         boolean w = Settings.System.canWrite(this) || sharedPrefs.getBoolean("BypassWriteSettings", false);
-        // FIX BUG AKSESIBILITAS: Baca langsung dari Flag Statis di Service, bukan dari sistem yang lambat
         boolean acc = ActionAssistantService.isServiceRunning;
 
         tvAudioCheck.setText(a ? "✅ Rekam Audio" : "❌ Rekam Audio"); tvAudioCheck.setTextColor(a ? 0xFF48BB78 : 0xFFE53E3E);
@@ -169,18 +180,23 @@ public class MainActivity extends AppCompatActivity {
         }
         if (!Settings.canDrawOverlays(this)) { Toast.makeText(this, "Izinkan Overlay Dulu!", Toast.LENGTH_SHORT).show(); return; }
         if (!Settings.System.canWrite(this) && !sharedPrefs.getBoolean("BypassWriteSettings", false)) {
-            sharedPrefs.edit().putBoolean("BypassWriteSettings", true).apply(); // Auto bypass Android Go
+            sharedPrefs.edit().putBoolean("BypassWriteSettings", true).apply();
         }
         androidx.core.content.ContextCompat.startForegroundService(this, new Intent(this, FloatingBubbleService.class));
         Toast.makeText(this, "Nova AI Meluncur!", Toast.LENGTH_SHORT).show();
     }
 
     private void showKeyDialog() {
-        String p = sharedPrefs.getString("SelectedAiProvider", "groq");
+        final String p = sharedPrefs.getString("SelectedAiProvider", "groq");
         AlertDialog.Builder b = new AlertDialog.Builder(this); b.setTitle("API Key untuk " + p.toUpperCase());
         final EditText input = new EditText(this); input.setText(sharedPrefs.getString("ApiKey_" + p, ""));
         b.setView(input);
-        b.setPositiveButton("Simpan", (d, w) -> sharedPrefs.edit().putString("ApiKey_" + p, input.getText().toString()).apply());
+        b.setPositiveButton("Simpan", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                sharedPrefs.edit().putString("ApiKey_" + p, input.getText().toString()).apply();
+            }
+        });
         b.setNegativeButton("Batal", null); b.show();
     }
 }
