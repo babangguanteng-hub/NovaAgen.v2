@@ -303,7 +303,7 @@ public class MainActivity extends AppCompatActivity {
         }
 
         // Tunda pembaruan UI sebentar agar siklus siklus hidup terikat
-        new Handler().postDelayed(this::updateUIState, 400);
+        new Handler(android.os.Looper.getMainLooper()).postDelayed(this::updateUIState, 400);
     }
 
     private void launchAccessibilitySettings() {
