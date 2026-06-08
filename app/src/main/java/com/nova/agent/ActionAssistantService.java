@@ -6,6 +6,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.graphics.Path;
 import android.net.Uri;
@@ -16,12 +17,11 @@ import android.os.Looper;
 import android.util.Log;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
-import android.widget.Toast;
+import java.util.List;
 
 public class ActionAssistantService extends AccessibilityService {
     public static boolean isServiceRunning = false;
     private CommandReceiver commandReceiver;
-    private final Handler handler = new Handler(Looper.getMainLooper());
 
     @Override
     protected void onServiceConnected() {
@@ -34,7 +34,7 @@ public class ActionAssistantService extends AccessibilityService {
         } else {
             registerReceiver(commandReceiver, filter);
         }
-        Log.d("NovaAction", "Real-Time Action Engine AKTIF.");
+        Log.d("NovaAction", "Nova Real-Time Control AKTIF!");
     }
 
     @Override
@@ -55,58 +55,52 @@ public class ActionAssistantService extends AccessibilityService {
         public void onReceive(Context context, Intent intent) {
             final String aiCommand = intent.getStringExtra("command_code");
             if (aiCommand == null) return;
-            Log.d("NovaAction", "Menerima Kode: " + aiCommand);
+            Log.d("NovaAction", "Menerima Kode Makro: " + aiCommand);
             
-            // Eksekusi kode secara bertahap agar terlihat nyata
             new Thread(new Runnable() {
                 @Override
-                public void run() {
-                    executeMacro(aiCommand);
-                }
+                public void run() { executeMacro(aiCommand); }
             }).start();
         }
     }
 
     private void executeMacro(String cmdBlock) {
         try {
-            // [CMD:OPEN:whatsapp]
+            // [CMD:OPEN:nama_aplikasi]
             if (cmdBlock.contains("[CMD:OPEN:")) {
                 String app = extractValue(cmdBlock, "[CMD:OPEN:", "]");
-                openAppByName(app);
-                Thread.sleep(2000); // Tunggu aplikasi terbuka
+                openSmartApp(app);
+                Thread.sleep(3000); // Beri waktu 3 detik agar aplikasi terbuka penuh
             }
             
-            // [CMD:TYPE:teks pesan] - Mengetik secara nyata di kolom aktif
+            // [CMD:TYPE:teks]
             if (cmdBlock.contains("[CMD:TYPE:")) {
                 String textToType = extractValue(cmdBlock, "[CMD:TYPE:", "]");
-                AccessibilityNodeInfo root = getRootInActiveWindow();
-                if (root != null) {
-                    AccessibilityNodeInfo inputBox = findNodeByClassName(root, "android.widget.EditText");
-                    if (inputBox != null) {
-                        Bundle arguments = new Bundle();
-                        arguments.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, textToType);
-                        inputBox.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, arguments);
-                        Thread.sleep(1000); // Jeda simulasi ngetik
-                    }
+                // Tunggu sampai kotak ketik muncul (Maksimal 5 detik pencarian)
+                AccessibilityNodeInfo inputBox = waitForNodeByClassName("android.widget.EditText", 5000);
+                if (inputBox != null) {
+                    Bundle arguments = new Bundle();
+                    arguments.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, textToType);
+                    inputBox.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, arguments);
+                    Thread.sleep(1000); 
                 }
             }
             
-            // [CMD:CLICK:Kirim] - Mencari tombol dengan teks tertentu lalu di klik
+            // [CMD:CLICK:teks_tombol]
             if (cmdBlock.contains("[CMD:CLICK:")) {
                 String textToClick = extractValue(cmdBlock, "[CMD:CLICK:", "]");
-                AccessibilityNodeInfo root = getRootInActiveWindow();
-                if (root != null) {
-                    clickNodeByText(root, textToClick);
-                    Thread.sleep(500);
-                }
+                waitForNodeAndClick(textToClick, 4000);
             }
 
             // [CMD:SCROLL_DOWN]
             if (cmdBlock.contains("[CMD:SCROLL_DOWN]")) {
-                swipe(500, 1500, 500, 300, 500);
+                swipe(500, 1500, 500, 300, 400); // Geser dari bawah ke atas (Scroll Down visual)
+            }
+            // [CMD:SCROLL_UP]
+            if (cmdBlock.contains("[CMD:SCROLL_UP]")) {
+                swipe(500, 300, 500, 1500, 400);
             }
 
-            // Command Spesifik yang lebih cepat
             if (cmdBlock.contains("[CMD:YOUTUBE:")) {
                 String query = extractValue(cmdBlock, "[CMD:YOUTUBE:", "]");
                 Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/results?search_query=" + Uri.encode(query)));
@@ -115,13 +109,12 @@ public class ActionAssistantService extends AccessibilityService {
             }
             if (cmdBlock.contains("[CMD:SHOPEE:")) {
                 String query = extractValue(cmdBlock, "[CMD:SHOPEE:", "]");
-                Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse("shopee://search?keyword=" + Uri.encode(query)));
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                try { startActivity(intent); } catch (Exception e) {
-                    Intent webIntent = new Intent(Intent.ACTION_VIEW, Uri.parse("https://shopee.co.id/search?keyword=" + Uri.encode(query)));
-                    webIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                    startActivity(webIntent);
-                }
+                Intent webIntent = new Intent(Intent.ACTION_VIEW, Uri.parse("https://shopee.co.id/search?keyword=" + Uri.encode(query)));
+                webIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(webIntent);
+            }
+            if (cmdBlock.contains("[CMD:HOME]")) {
+                performGlobalAction(GLOBAL_ACTION_HOME);
             }
         } catch (Exception e) {
             Log.e("NovaAction", "Error Macro: " + e.getMessage());
@@ -136,30 +129,62 @@ public class ActionAssistantService extends AccessibilityService {
         } catch (Exception e) { return ""; }
     }
 
-    private void openAppByName(String appName) {
+    // PENCARI APLIKASI SUPER PINTAR (Bisa buka SEMUA aplikasi di HP)
+    private void openSmartApp(String appNameRequested) {
         PackageManager pm = getPackageManager();
-        String targetPackage = "";
-        appName = appName.toLowerCase();
-        if (appName.contains("wa") || appName.contains("whatsapp")) targetPackage = "com.whatsapp";
-        else if (appName.contains("youtube")) targetPackage = "com.google.android.youtube";
-        else if (appName.contains("ig") || appName.contains("instagram")) targetPackage = "com.instagram.android";
-        else if (appName.contains("tiktok")) targetPackage = "com.zhiliaoapp.musically";
+        List<ApplicationInfo> packages = pm.getInstalledApplications(PackageManager.GET_META_DATA);
+        String requestedLower = appNameRequested.toLowerCase().trim();
         
-        if (!targetPackage.isEmpty()) {
-            Intent launchIntent = pm.getLaunchIntentForPackage(targetPackage);
-            if (launchIntent != null) {
-                launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                startActivity(launchIntent);
+        // Pengecualian khusus untuk singkatan populer
+        if (requestedLower.equals("wa")) requestedLower = "whatsapp";
+        if (requestedLower.equals("ig")) requestedLower = "instagram";
+
+        for (ApplicationInfo packageInfo : packages) {
+            String installedAppName = pm.getApplicationLabel(packageInfo).toString().toLowerCase();
+            if (installedAppName.contains(requestedLower)) {
+                Intent launchIntent = pm.getLaunchIntentForPackage(packageInfo.packageName);
+                if (launchIntent != null) {
+                    launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    startActivity(launchIntent);
+                    return; // Selesai jika ketemu
+                }
             }
         }
+        // Jika tidak ketemu, coba buka Playstore untuk mencari aplikasi tersebut
+        Intent fallbackIntent = new Intent(Intent.ACTION_VIEW, Uri.parse("market://search?q=" + Uri.encode(appNameRequested)));
+        fallbackIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        try { startActivity(fallbackIntent); } catch (Exception ignored) {}
     }
 
-    // Rekursif mencari EditText (Kotak Input)
+    // FITUR MATA AI: Menunggu elemen muncul sebelum dieksekusi (Anti Gagal)
+    private AccessibilityNodeInfo waitForNodeByClassName(String className, int timeoutMs) throws InterruptedException {
+        long startTime = System.currentTimeMillis();
+        while (System.currentTimeMillis() - startTime < timeoutMs) {
+            AccessibilityNodeInfo root = getRootInActiveWindow();
+            if (root != null) {
+                AccessibilityNodeInfo node = findNodeByClassName(root, className);
+                if (node != null) return node;
+            }
+            Thread.sleep(500); // Cek setiap setengah detik
+        }
+        return null;
+    }
+
+    private boolean waitForNodeAndClick(String text, int timeoutMs) throws InterruptedException {
+        long startTime = System.currentTimeMillis();
+        while (System.currentTimeMillis() - startTime < timeoutMs) {
+            AccessibilityNodeInfo root = getRootInActiveWindow();
+            if (root != null && clickNodeByText(root, text)) {
+                return true;
+            }
+            Thread.sleep(500);
+        }
+        return false;
+    }
+
     private AccessibilityNodeInfo findNodeByClassName(AccessibilityNodeInfo node, String className) {
         if (node == null) return null;
-        if (className.equals(node.getClassName().toString()) && node.isEditable()) {
-            return node;
-        }
+        if (className.equals(node.getClassName().toString()) && node.isEditable()) return node;
         for (int i = 0; i < node.getChildCount(); i++) {
             AccessibilityNodeInfo result = findNodeByClassName(node.getChild(i), className);
             if (result != null) return result;
@@ -167,7 +192,6 @@ public class ActionAssistantService extends AccessibilityService {
         return null;
     }
 
-    // Rekursif mencari tombol/elemen berdasarkan teks dan mengkliknya
     private boolean clickNodeByText(AccessibilityNodeInfo node, String text) {
         if (node == null) return false;
         CharSequence nodeText = node.getText();

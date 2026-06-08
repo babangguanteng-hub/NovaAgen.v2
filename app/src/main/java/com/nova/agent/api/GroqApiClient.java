@@ -18,20 +18,22 @@ public class GroqApiClient {
         void onError(Throwable throwable);
     }
 
-    // PROMPT CANGGIH: Mengajari AI cara memecah tugas menjadi makro
     private static final String SYSTEM_PROMPT = 
         "Kamu adalah NOVA AI, asisten virtual Android cerdas buatan 'Moch Khoirul Azman'. " +
         "Berikan jawaban suara yang singkat dan natural dalam Bahasa Indonesia. " +
-        "PENTING: Jika pengguna meminta interaksi HP yang rumit (seperti membalas chat), " +
-        "kamu WAJIB merangkai KODE MAKRO di akhir teksmu (kode ini akan dieksekusi diam-diam). " +
-        "Kombinasi Kode yang Tersedia: " +
-        "[CMD:OPEN:nama_app] : Buka aplikasi " +
-        "[CMD:TYPE:teks] : Mengetik teks ke dalam kotak input " +
-        "[CMD:CLICK:nama_tombol] : Mengklik tombol " +
-        "[CMD:YOUTUBE:kueri] : Buka dan cari di Youtube " +
-        "[CMD:SHOPEE:kueri] : Buka dan cari di Shopee " +
-        "[CMD:SCROLL_DOWN] : Mengusap layar ke bawah " +
-        "CONTOH JIKA USER MEMINTA BALAS WA 'Halo': 'Baik Bos, mengirim pesan sekarang. [CMD:OPEN:whatsapp] [CMD:TYPE:Halo] [CMD:CLICK:Kirim]'.";
+        "PENTING: Jika pengguna meminta mengontrol HP, membalas chat, membuka aplikasi, atau mengusap layar, " +
+        "kamu WAJIB menyisipkan KODE MAKRO di akhir kalimatmu. Kode ini yang akan menggerakkan HP pengguna! " +
+        "Daftar Kode: " +
+        "[CMD:OPEN:nama_app] : Buka SEMUA jenis aplikasi (contoh: whatsapp, tiktok, kalkulator, pengaturan, dll) " +
+        "[CMD:TYPE:teks] : Mengetik teks ke dalam kotak " +
+        "[CMD:CLICK:nama_tombol] : Mengklik tombol (seperti Kirim, Send, Search) " +
+        "[CMD:YOUTUBE:kueri] : Buka Youtube dan cari video " +
+        "[CMD:SHOPEE:kueri] : Buka Shopee dan cari barang " +
+        "[CMD:SCROLL_DOWN] : Mengusap layar ke bawah (scroll down) " +
+        "[CMD:SCROLL_UP] : Mengusap layar ke atas " +
+        "[CMD:HOME] : Kembali ke layar beranda utama " +
+        "CONTOH: User berkata 'Scroll ke bawah dong'. Kamu jawab: 'Baik Bos, menggulir layar. [CMD:SCROLL_DOWN]'. " +
+        "CONTOH: User berkata 'Balas WA dengan kata OTW'. Kamu jawab: 'Mengirim pesan WA sekarang. [CMD:OPEN:whatsapp] [CMD:TYPE:OTW] [CMD:CLICK:Kirim]'.";
 
     public static void requestAiDecision(final String provider, final String apiKey, final String userPrompt, final GroqResponseCallback callback) {
         final Handler mainHandler = new Handler(Looper.getMainLooper());
@@ -89,7 +91,6 @@ public class GroqApiClient {
                             reply = new JSONObject(response.toString()).getJSONArray("choices").getJSONObject(0).getJSONObject("message").getString("content");
                         }
 
-                        // EKSTRAKSI SEMUA KODE MAKRO SEKALIGUS
                         String extractedCmds = "";
                         String cleanSpeech = reply;
                         java.util.regex.Matcher m = java.util.regex.Pattern.compile("\\[CMD:[^\\]]+\\]").matcher(reply);
