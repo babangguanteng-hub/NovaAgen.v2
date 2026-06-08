@@ -13,6 +13,8 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.PixelFormat;
+import android.graphics.RadialGradient;
+import android.graphics.Shader;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -46,16 +48,20 @@ public class FloatingBubbleService extends Service implements TextToSpeech.OnIni
     private TextToSpeech mTTS;
     private SharedPreferences mSharedPrefs;
     private boolean mIsListening = false;
+    
+    // Aurora Animation Variables
+    private float mAnimationOffset = 0f;
+    private Handler mAnimHandler = new Handler(Looper.getMainLooper());
+    private Runnable mAnimRunnable;
 
     @Override
     public void onCreate() {
         super.onCreate();
         mSharedPrefs = getSharedPreferences("NovaAgentPrefs", MODE_PRIVATE);
         
-        // 1. BUAT NOTIFIKASI FOREGROUND INSTAN (Wajib untuk mencegah crash Android 14)
+        // 1. FOREGROUND SERVICE HANDSHAKE
         createNotificationChannel();
-        Notification notification = buildNotification("Nova Agent aktif di latar belakang");
-        
+        Notification notification = buildNotification("Nova Agent aktif melayang.");
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE);
@@ -63,33 +69,94 @@ public class FloatingBubbleService extends Service implements TextToSpeech.OnIni
                 startForeground(NOTIFICATION_ID, notification);
             }
         } catch (Exception e) {
-            Log.e(TAG, "Gagal memulai Foreground Service: " + e.getMessage());
             startForeground(NOTIFICATION_ID, notification);
         }
 
-        // 2. INISIALISASI TEXT-TO-SPEECH
+        // 2. TTS INIT
         mTTS = new TextToSpeech(this, this);
 
-        // 3. GAMBAR GELEMBUNG MELAYANG SECARA AMAN (Bebas dari Crash WindowManager di Android Go)
+        // 3. GAMBAR GELEMBUNG MELAYANG AURORA DENGAN WATERMARK DEVS
         mWindowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
         mBubbleView = new View(this) {
-            private Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+            private Paint mPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+            private Paint mTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
             @Override
             protected void onDraw(Canvas canvas) {
-                // Gambar Bola Melayang Ungu Neon dengan Bingkai Biru Muda
-                paint.setColor(0xFF00F5D4); // Neon Blue Border
-                canvas.drawCircle(getWidth() / 2f, getHeight() / 2f, getWidth() / 2f, paint);
-                paint.setColor(0xFF6B46C1); // Purple Core
-                canvas.drawCircle(getWidth() / 2f, getHeight() / 2f, (getWidth() / 2f) - 6f, paint);
+                float width = getWidth();
+                float height = getHeight();
+                float cx = width / 2f;
+                float cy = height / 2f;
+                float radius = width / 2f;
+
+                // Animasi Aurora: Pulsing Shifting Gradient Radius
+                mAnimationOffset += 0.05f;
+                float waveFactor = (float) Math.sin(mAnimationOffset) * 10f;
+                float currentRadius = radius - 10f + waveFactor;
+
+                // 1. Gambar Glow Shadow Aurora Luar
+                mPaint.setShader(new RadialGradient(cx, cy, radius,
+                        new int[]{0xFF00F5D4, 0xFF6B46C1, 0x00000000},
+                        new float[]{0f, 0.7f, 1f}, Shader.TileMode.CLAMP));
+                canvas.drawCircle(cx, cy, radius, mPaint);
+
+                // 2. Gambar Solid Aurora Core Tengah
+                mPaint.setShader(new RadialGradient(cx, cy, currentRadius,
+                        new int[]{0xFF6B46C1, 0xFFD53F8C, 0xFF00F5D4},
+                        new float[]{0f, 0.5f, 1f}, Shader.TileMode.CLAMP));
+                canvas.drawCircle(cx, cy, currentRadius - 5f, mPaint);
+
+                // 3. Gambar Stroke Border Neon
+                mPaint.setShader(null);
+                mPaint.setStyle(Paint.Style.STROKE);
+                mPaint.setColor(0xFFFFFFFF);
+                mPaint.setStrokeWidth(3f);
+                canvas.drawCircle(cx, cy, currentRadius - 5f, mPaint);
+                mPaint.setStyle(Paint.Style.FILL); // Reset
+
+                // 4. Gambar Teks Custom "NOVA AI by Moch Khoirul Azman"
+                mTextPaint.setColor(Color.WHITE);
+                mTextPaint.setFakeBoldText(true);
+                mTextPaint.setTextAlign(Paint.Align.CENTER);
+                mTextPaint.setShadowLayer(5f, 0, 0, Color.BLACK);
+
+                // Line 1: NOVA AI
+                mTextPaint.setTextSize(22f);
+                mTextPaint.setColor(0xFF00F5D4); // Cyan Neon
+                canvas.drawText("NOVA AI", cx, cy - 25f, mTextPaint);
+
+                // Line 2: by
+                mTextPaint.setTextSize(12f);
+                mTextPaint.setColor(Color.WHITE);
+                canvas.drawText("by", cx, cy - 5f, mTextPaint);
+
+                // Line 3: Moch Khoirul
+                mTextPaint.setTextSize(11f);
+                mTextPaint.setColor(0xFFD53F8C); // Pink Magenta
+                canvas.drawText("Moch Khoirul", cx, cy + 18f, mTextPaint);
+
+                // Line 4: Azman
+                canvas.drawText("Azman", cx, cy + 34f, mTextPaint);
             }
         };
+
+        // Mulai Loop Animasi Ringan
+        mAnimRunnable = new Runnable() {
+            @Override
+            public void run() {
+                mBubbleView.invalidate();
+                mAnimHandler.postDelayed(this, 33); // 30 FPS untuk kelancaran sempurna
+            }
+        };
+        mAnimHandler.post(mAnimRunnable);
 
         int layoutType = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ?
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY :
                 WindowManager.LayoutParams.TYPE_PHONE;
 
+        // Kita perbesar ukuran sedikit menjadi 220x220 agar tulisan Moch Khoirul Azman terbaca sangat tajam
         mParams = new WindowManager.LayoutParams(
-                140, 140, // Lebar & Tinggi Gelembung melayang
+                220, 220,
                 layoutType,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
                 PixelFormat.TRANSLUCENT
@@ -99,7 +166,6 @@ public class FloatingBubbleService extends Service implements TextToSpeech.OnIni
         mParams.x = 100;
         mParams.y = 100;
 
-        // Pasang sensor gerakan seret pada gelembung
         mBubbleView.setOnTouchListener(new View.OnTouchListener() {
             private int lastAction;
             private int initialX;
@@ -123,15 +189,12 @@ public class FloatingBubbleService extends Service implements TextToSpeech.OnIni
                         mParams.y = initialY + (int) (event.getRawY() - initialTouchY);
                         try {
                             mWindowManager.updateViewLayout(mBubbleView, mParams);
-                        } catch (Exception e) {
-                            Log.e(TAG, "Gagal menggeser gelembung: " + e.getMessage());
-                        }
+                        } catch (Exception ignored) {}
                         lastAction = event.getAction();
                         return true;
 
                     case MotionEvent.ACTION_UP:
                         if (lastAction == MotionEvent.ACTION_DOWN) {
-                            // Deteksi klik cepat -> Mulai/Hentikan Mendengar Perintah Suara!
                             toggleVoiceListening();
                         }
                         lastAction = event.getAction();
@@ -141,12 +204,9 @@ public class FloatingBubbleService extends Service implements TextToSpeech.OnIni
             }
         });
 
-        // Tampilkan gelembung di layar secara aman dengan proteksi try-catch
         try {
             mWindowManager.addView(mBubbleView, mParams);
         } catch (Exception e) {
-            Log.e(TAG, "Gagal menampilkan gelembung melayang: " + e.getMessage());
-            Toast.makeText(this, "Gagal memunculkan gelembung. Pastikan izin Overlay aktif!", Toast.LENGTH_LONG).show();
             stopSelf();
         }
     }
@@ -161,59 +221,53 @@ public class FloatingBubbleService extends Service implements TextToSpeech.OnIni
 
     private void startListening() {
         mIsListening = true;
-        speakDirectly("Ya, saya mendengarkan.");
+        speakDirectly("Halo saya Nova, sedang mendengarkan.");
         
-        new Handler(Looper.getMainLooper()).post(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    if (mSpeechRecognizer != null) {
-                        mSpeechRecognizer.destroy();
-                    }
-                    mSpeechRecognizer = SpeechRecognizer.createSpeechRecognizer(FloatingBubbleService.this);
-                    Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
-                    intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
-                    intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "id-ID"); // Bahasa Indonesia
-
-                    mSpeechRecognizer.setRecognitionListener(new RecognitionListener() {
-                        @Override
-                        public void onReadyForSpeech(Bundle params) {}
-                        @Override
-                        public void onBeginningOfSpeech() {}
-                        @Override
-                        public void onRmsChanged(float rmsdB) {}
-                        @Override
-                        public void onBufferReceived(byte[] buffer) {}
-                        @Override
-                        public void onEndOfSpeech() {
-                            mIsListening = false;
-                        }
-                        @Override
-                        public void onError(int error) {
-                            mIsListening = false;
-                            Log.e(TAG, "SpeechRecognizer Error: " + error);
-                        }
-
-                        @Override
-                        public void onResults(Bundle results) {
-                            ArrayList<String> matches = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
-                            if (matches != null && !matches.isEmpty()) {
-                                String voiceCommand = matches.get(0);
-                                processVoiceCommand(voiceCommand);
-                            }
-                        }
-
-                        @Override
-                        public void onPartialResults(Bundle partialResults) {}
-                        @Override
-                        public void onEvent(int eventType, Bundle params) {}
-                    });
-
-                    mSpeechRecognizer.startListening(intent);
-                } catch (Exception e) {
-                    mIsListening = false;
-                    Log.e(TAG, "Gagal memulai perekam suara: " + e.getMessage());
+        new Handler(Looper.getMainLooper()).post(() -> {
+            try {
+                if (mSpeechRecognizer != null) {
+                    mSpeechRecognizer.destroy();
                 }
+                mSpeechRecognizer = SpeechRecognizer.createSpeechRecognizer(FloatingBubbleService.this);
+                Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+                intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+                intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "id-ID");
+
+                mSpeechRecognizer.setRecognitionListener(new RecognitionListener() {
+                    @Override
+                    public void onReadyForSpeech(Bundle params) {}
+                    @Override
+                    public void onBeginningOfSpeech() {}
+                    @Override
+                    public void onRmsChanged(float rmsdB) {}
+                    @Override
+                    public void onBufferReceived(byte[] buffer) {}
+                    @Override
+                    public void onEndOfSpeech() {
+                        mIsListening = false;
+                    }
+                    @Override
+                    public void onError(int error) {
+                        mIsListening = false;
+                    }
+
+                    @Override
+                    public void onResults(Bundle results) {
+                        ArrayList<String> matches = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+                        if (matches != null && !matches.isEmpty()) {
+                            processVoiceCommand(matches.get(0));
+                        }
+                    }
+
+                    @Override
+                    public void onPartialResults(Bundle partialResults) {}
+                    @Override
+                    public void onEvent(int eventType, Bundle params) {}
+                });
+
+                mSpeechRecognizer.startListening(intent);
+            } catch (Exception e) {
+                mIsListening = false;
             }
         });
     }
@@ -226,20 +280,21 @@ public class FloatingBubbleService extends Service implements TextToSpeech.OnIni
     }
 
     private void processVoiceCommand(String voiceCommand) {
-        String apiKey = mSharedPrefs.getString("GroqApiKey", "");
+        String activeProvider = mSharedPrefs.getString("SelectedAiProvider", "groq");
+        String apiKey = mSharedPrefs.getString("ApiKey_" + activeProvider, "");
+
         if (apiKey.isEmpty()) {
-            speakDirectly("API Key belum disetel. Silakan isi terlebih dahulu di dalam aplikasi.");
+            speakDirectly("Kunci API " + activeProvider.toUpperCase() + " belum disetel di aplikasi.");
             return;
         }
 
         speakDirectly("Sedang berpikir.");
 
-        GroqApiClient.requestAiDecision(apiKey, voiceCommand, new GroqApiClient.GroqResponseCallback() {
+        GroqApiClient.requestAiDecision(activeProvider, apiKey, voiceCommand, new GroqApiClient.GroqResponseCallback() {
             @Override
             public void onSuccess(String aiResponseText) {
                 speakDirectly(aiResponseText);
                 
-                // Kirim siaran aman untuk diolah oleh Layanan Aksesibilitas kita
                 Intent intent = new Intent("com.nova.agent.EXECUTE");
                 intent.putExtra("ai_response", aiResponseText);
                 intent.putExtra("original_command", voiceCommand);
@@ -249,7 +304,7 @@ public class FloatingBubbleService extends Service implements TextToSpeech.OnIni
 
             @Override
             public void onError(Throwable throwable) {
-                speakDirectly("Koneksi ke otak Groq gagal.");
+                speakDirectly("Koneksi otak gagal: " + throwable.getMessage());
             }
         });
     }
@@ -289,7 +344,7 @@ public class FloatingBubbleService extends Service implements TextToSpeech.OnIni
         );
 
         return new NotificationCompat.Builder(this, CHANNEL_ID)
-                .setContentTitle("Nova Agent Aktif")
+                .setContentTitle("Nova Agent")
                 .setContentText(text)
                 .setSmallIcon(android.R.drawable.ic_dialog_info)
                 .setContentIntent(pendingIntent)
@@ -305,12 +360,11 @@ public class FloatingBubbleService extends Service implements TextToSpeech.OnIni
     @Override
     public void onDestroy() {
         super.onDestroy();
+        mAnimHandler.removeCallbacks(mAnimRunnable);
         if (mBubbleView != null && mWindowManager != null) {
             try {
                 mWindowManager.removeView(mBubbleView);
-            } catch (Exception e) {
-                Log.e(TAG, "Gagal melepas gelembung melayang: " + e.getMessage());
-            }
+            } catch (Exception ignored) {}
         }
         if (mSpeechRecognizer != null) {
             mSpeechRecognizer.destroy();
