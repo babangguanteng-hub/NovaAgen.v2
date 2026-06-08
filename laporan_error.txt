@@ -10,29 +10,24 @@
 > Task :app:mergeDebugAssets
 > Task :app:compressDebugAssets
 > Task :app:desugarDebugFileDependencies
-> Task :app:processDebugJavaRes NO-SOURCE
-> Task :app:mergeDebugJniLibFolders
-> Task :app:mergeDebugJavaResource
-> Task :app:checkDebugDuplicateClasses
-> Task :app:mergeDebugNativeLibs NO-SOURCE
 > Task :app:processDebugManifestForPackage
-> Task :app:mergeLibDexDebug
-> Task :app:stripDebugDebugSymbols NO-SOURCE
-> Task :app:processDebugResources FAILED
-> Task :app:mergeExtDexDebug
-> Task :app:validateSigningDebug
+> Task :app:processDebugJavaRes NO-SOURCE
+> Task :app:processDebugResources
+> Task :app:mergeDebugJavaResource
+
+> Task :app:compileDebugJavaWithJavac
+/home/runner/work/NovaAgen.v2/NovaAgen.v2/app/src/main/java/com/nova/agent/ActionAssistantService.java:133: error: cannot find symbol
+        PackageManager pm = getPackageManager();
+        ^
+  symbol:   class PackageManager
+  location: class ActionAssistantService
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+1 error
+
+> Task :app:compileDebugJavaWithJavac FAILED
 
 FAILURE: Build failed with an exception.
 
 * What went wrong:
-Execution failed for task ':app:processDebugResources'.
-> A failure occurred while executing com.android.build.gradle.internal.res.LinkApplicationAndroidResourcesTask$TaskAction
-   > Android resource linking failed
-     ERROR: /home/runner/work/NovaAgen.v2/NovaAgen.v2/app/src/main/res/drawable/ic_launcher_nova.xml:5: AAPT: error: attribute android:viewportViewportHeight not found.
-         
-
-* Try:
-> Run with --info or --debug option to get more log output.
-> Run with --scan to get full insights.
-> Get more help at https://help.gradle.org.
-
+Execution failed for task ':app:compileDebugJavaWithJavac'.
