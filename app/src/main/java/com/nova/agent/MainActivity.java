@@ -268,7 +268,7 @@ public class MainActivity extends AppCompatActivity {
 
         // Jika semua izin terpenuhi, jalankan Floating Bubble!
         Intent intent = new Intent(this, FloatingBubbleService.class);
-        startService(intent);
+        androidx.core.content.ContextCompat.startForegroundService(this, intent);
         Toast.makeText(this, "Nova Agent Floating Bubble diaktifkan!", Toast.LENGTH_SHORT).show();
     }
 

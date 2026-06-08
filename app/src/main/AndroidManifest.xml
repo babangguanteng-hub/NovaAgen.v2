@@ -4,6 +4,10 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    
+    <!-- Izin Wajib Android 14 untuk Foreground Service -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
 
     <application
         android:allowBackup="true"
@@ -20,8 +24,10 @@
             </intent-filter>
         </activity>
 
+        <!-- Deklarasi Jenis Foreground Service wajib di Android 14 -->
         <service
             android:name=".FloatingBubbleService"
+            android:foregroundServiceType="microphone"
             android:exported="false" />
 
         <service
