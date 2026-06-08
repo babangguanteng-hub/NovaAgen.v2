@@ -2,7 +2,7 @@
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
-    android:viewportViewportHeight="108">
+    android:viewportHeight="108">
     
     <!-- Latar Belakang Gradasi Gelap Bulat -->
     <path
