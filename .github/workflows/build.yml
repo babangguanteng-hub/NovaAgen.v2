@@ -6,9 +6,6 @@ on:
   pull_request:
     branches: [ "main" ]
 
-permissions:
-  contents: write
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -16,8 +13,6 @@ jobs:
     steps:
     - name: Ambil Kode dari Repositori
       uses: actions/checkout@v4
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Siapkan Java JDK 17
       uses: actions/setup-java@v4
@@ -25,31 +20,16 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    - name: Pasang Gradle
+    - name: Pasang Gradle Resmi (Versi 8.4)
       uses: gradle/actions/setup-gradle@v3
       with:
         gradle-version: '8.4'
 
-    - name: Jalankan Build APK dan Tangkap Log
-      run: |
-        ./gradlew assembleDebug --no-daemon --stacktrace > error_log.txt 2>&1 || {
-          echo "BUILD_FAILED=true" >> $GITHUB_ENV
-          exit 1
-        }
-      continue-on-error: true
-
-    - name: Komit dan Kirim Balik Log Error jika Gagal
-      if: env.BUILD_FAILED == 'true'
-      run: |
-        git config --global user.name "github-actions[bot]"
-        git config --global user.email "github-actions[bot]@users.noreply.github.com"
-        git add error_log.txt
-        git commit -m "docs: save build error log [skip ci]" || true
-        git push origin HEAD:main
-        exit 1
+    - name: Jalankan Build APK dengan Gradle Global
+      # Menggunakan "gradle" secara langsung, bukan "./gradlew" lokal
+      run: gradle assembleDebug --no-daemon --stacktrace
 
     - name: Simpan dan Unggah Berkas APK jika Sukses
-      if: env.BUILD_FAILED != 'true'
       uses: actions/upload-artifact@v4
       with:
         name: NovaAgent-Debug-APK
