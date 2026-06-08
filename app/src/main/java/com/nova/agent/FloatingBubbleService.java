@@ -27,7 +27,6 @@ import android.speech.RecognitionListener;
 import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
 import android.speech.tts.TextToSpeech;
-import android.util.Log;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
@@ -48,14 +47,17 @@ public class FloatingBubbleService extends Service implements TextToSpeech.OnIni
     
     public boolean mIsListening = false;
     private float mAnimOffset = 0f;
-    private Handler mAnimHandler = new Handler(Looper.getMainLooper());
+    private final Handler mAnimHandler = new Handler(Looper.getMainLooper());
     private Runnable mAnimRunnable;
 
     @Override
     public void onCreate() {
         super.onCreate();
         mSharedPrefs = getSharedPreferences("NovaAgentPrefs", MODE_PRIVATE);
-        mVibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
+        
+        try {
+            mVibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
+        } catch (Exception ignored) {}
         
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel ch = new NotificationChannel("NovaBubble", "Nova Bubble", NotificationManager.IMPORTANCE_LOW);
@@ -76,10 +78,10 @@ public class FloatingBubbleService extends Service implements TextToSpeech.OnIni
 
         mWindowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
         mBubbleView = new View(this) {
-            private Paint glowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-            private Paint wavePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-            private Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-            private Path wavePath = new Path();
+            private final Paint glowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+            private final Paint wavePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+            private final Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+            private final Path wavePath = new Path();
 
             @Override
             protected void onDraw(Canvas canvas) {
@@ -100,7 +102,6 @@ public class FloatingBubbleService extends Service implements TextToSpeech.OnIni
                 wavePaint.setStyle(Paint.Style.STROKE);
                 wavePaint.setStrokeWidth(3f);
                 wavePaint.setColor(mIsListening ? 0xFFFFFFFF : 0xFF00F5D4);
-                wavePaint.setMaskFilter(new BlurMaskFilter(4f, BlurMaskFilter.Blur.SOLID));
                 
                 wavePath.reset();
                 int numPoints = 60;
@@ -163,7 +164,7 @@ public class FloatingBubbleService extends Service implements TextToSpeech.OnIni
                     case MotionEvent.ACTION_MOVE:
                         mParams.x = initialX + (int) (event.getRawX() - initialTouchX);
                         mParams.y = initialY + (int) (event.getRawY() - initialTouchY);
-                        mWindowManager.updateViewLayout(mBubbleView, mParams);
+                        try { mWindowManager.updateViewLayout(mBubbleView, mParams); } catch (Exception ignored) {}
                         lastAction = event.getAction(); return true;
                     case MotionEvent.ACTION_UP:
                         if (lastAction == MotionEvent.ACTION_DOWN) toggleVoiceListening();
@@ -181,7 +182,7 @@ public class FloatingBubbleService extends Service implements TextToSpeech.OnIni
 
     private void startListening() {
         mIsListening = true;
-        if (mVibrator != null) mVibrator.vibrate(50);
+        try { if (mVibrator != null && mVibrator.hasVibrator()) mVibrator.vibrate(50); } catch (Exception ignored) {}
         if (mTTS != null) mTTS.stop();
         
         new Handler(Looper.getMainLooper()).post(new Runnable() {
@@ -229,7 +230,7 @@ public class FloatingBubbleService extends Service implements TextToSpeech.OnIni
             @Override
             public void onSuccess(String speechText, String commandCode) {
                 speak(speechText);
-                if (commandCode != null) {
+                if (commandCode != null && !commandCode.isEmpty()) {
                     Intent intent = new Intent("com.nova.agent.EXECUTE_ACTION");
                     intent.putExtra("command_code", commandCode);
                     intent.setPackage(getPackageName());

@@ -10,24 +10,23 @@ import android.content.pm.PackageManager;
 import android.graphics.Path;
 import android.net.Uri;
 import android.os.Build;
+import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
 import android.widget.Toast;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 public class ActionAssistantService extends AccessibilityService {
-    // Flag statis untuk mengatasi bug "Status Mati" di UI
     public static boolean isServiceRunning = false;
     private CommandReceiver commandReceiver;
+    private final Handler handler = new Handler(Looper.getMainLooper());
 
     @Override
     protected void onServiceConnected() {
         super.onServiceConnected();
         isServiceRunning = true;
-        
-        // Mendaftar pendengar perintah dari AI
         commandReceiver = new CommandReceiver();
         IntentFilter filter = new IntentFilter("com.nova.agent.EXECUTE_ACTION");
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -35,13 +34,11 @@ public class ActionAssistantService extends AccessibilityService {
         } else {
             registerReceiver(commandReceiver, filter);
         }
-        Log.d("NovaAction", "Layanan Aksesibilitas Nova AKTIF.");
+        Log.d("NovaAction", "Real-Time Action Engine AKTIF.");
     }
 
     @Override
-    public void onAccessibilityEvent(AccessibilityEvent event) {
-        // Pemantauan UI untuk fitur baca layar di masa depan
-    }
+    public void onAccessibilityEvent(AccessibilityEvent event) {}
 
     @Override
     public void onInterrupt() {}
@@ -49,86 +46,153 @@ public class ActionAssistantService extends AccessibilityService {
     @Override
     public boolean onUnbind(Intent intent) {
         isServiceRunning = false;
-        if (commandReceiver != null) {
-            try { unregisterReceiver(commandReceiver); } catch (Exception ignored) {}
-        }
+        try { unregisterReceiver(commandReceiver); } catch (Exception ignored) {}
         return super.onUnbind(intent);
     }
 
-    // --- MESIN EKSEKUSI PERINTAH ---
     private class CommandReceiver extends BroadcastReceiver {
         @Override
         public void onReceive(Context context, Intent intent) {
-            String aiCommand = intent.getStringExtra("command_code");
+            final String aiCommand = intent.getStringExtra("command_code");
             if (aiCommand == null) return;
-            executeAction(aiCommand);
+            Log.d("NovaAction", "Menerima Kode: " + aiCommand);
+            
+            // Eksekusi kode secara bertahap agar terlihat nyata
+            new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    executeMacro(aiCommand);
+                }
+            }).start();
         }
     }
 
-    private void executeAction(String cmdBlock) {
-        Log.d("NovaAction", "Mengeksekusi Kode: " + cmdBlock);
+    private void executeMacro(String cmdBlock) {
         try {
-            if (cmdBlock.startsWith("[CMD:OPEN:")) {
-                String appName = cmdBlock.replace("[CMD:OPEN:", "").replace("]", "").toLowerCase().trim();
-                openAppByName(appName);
-            } 
-            else if (cmdBlock.startsWith("[CMD:YOUTUBE:")) {
-                String query = cmdBlock.replace("[CMD:YOUTUBE:", "").replace("]", "").trim();
+            // [CMD:OPEN:whatsapp]
+            if (cmdBlock.contains("[CMD:OPEN:")) {
+                String app = extractValue(cmdBlock, "[CMD:OPEN:", "]");
+                openAppByName(app);
+                Thread.sleep(2000); // Tunggu aplikasi terbuka
+            }
+            
+            // [CMD:TYPE:teks pesan] - Mengetik secara nyata di kolom aktif
+            if (cmdBlock.contains("[CMD:TYPE:")) {
+                String textToType = extractValue(cmdBlock, "[CMD:TYPE:", "]");
+                AccessibilityNodeInfo root = getRootInActiveWindow();
+                if (root != null) {
+                    AccessibilityNodeInfo inputBox = findNodeByClassName(root, "android.widget.EditText");
+                    if (inputBox != null) {
+                        Bundle arguments = new Bundle();
+                        arguments.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, textToType);
+                        inputBox.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, arguments);
+                        Thread.sleep(1000); // Jeda simulasi ngetik
+                    }
+                }
+            }
+            
+            // [CMD:CLICK:Kirim] - Mencari tombol dengan teks tertentu lalu di klik
+            if (cmdBlock.contains("[CMD:CLICK:")) {
+                String textToClick = extractValue(cmdBlock, "[CMD:CLICK:", "]");
+                AccessibilityNodeInfo root = getRootInActiveWindow();
+                if (root != null) {
+                    clickNodeByText(root, textToClick);
+                    Thread.sleep(500);
+                }
+            }
+
+            // [CMD:SCROLL_DOWN]
+            if (cmdBlock.contains("[CMD:SCROLL_DOWN]")) {
+                swipe(500, 1500, 500, 300, 500);
+            }
+
+            // Command Spesifik yang lebih cepat
+            if (cmdBlock.contains("[CMD:YOUTUBE:")) {
+                String query = extractValue(cmdBlock, "[CMD:YOUTUBE:", "]");
                 Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/results?search_query=" + Uri.encode(query)));
                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                 startActivity(intent);
             }
-            else if (cmdBlock.startsWith("[CMD:SHOPEE:")) {
-                String query = cmdBlock.replace("[CMD:SHOPEE:", "").replace("]", "").trim();
+            if (cmdBlock.contains("[CMD:SHOPEE:")) {
+                String query = extractValue(cmdBlock, "[CMD:SHOPEE:", "]");
                 Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse("shopee://search?keyword=" + Uri.encode(query)));
                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                 try { startActivity(intent); } catch (Exception e) {
-                    // Fallback ke browser jika aplikasi Shopee tidak ada
                     Intent webIntent = new Intent(Intent.ACTION_VIEW, Uri.parse("https://shopee.co.id/search?keyword=" + Uri.encode(query)));
                     webIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                     startActivity(webIntent);
                 }
             }
-            else if (cmdBlock.equals("[CMD:SCROLL_DOWN]")) {
-                performGlobalAction(GLOBAL_ACTION_HOME); // Fallback ringan
-                swipe(500, 1500, 500, 300);
-            }
-            else if (cmdBlock.equals("[CMD:HOME]")) {
-                performGlobalAction(GLOBAL_ACTION_HOME);
-            }
-            else if (cmdBlock.equals("[CMD:BACK]")) {
-                performGlobalAction(GLOBAL_ACTION_BACK);
-            }
         } catch (Exception e) {
-            Log.e("NovaAction", "Gagal eksekusi: " + e.getMessage());
+            Log.e("NovaAction", "Error Macro: " + e.getMessage());
         }
+    }
+
+    private String extractValue(String fullCmd, String prefix, String suffix) {
+        try {
+            int start = fullCmd.indexOf(prefix) + prefix.length();
+            int end = fullCmd.indexOf(suffix, start);
+            return fullCmd.substring(start, end).trim();
+        } catch (Exception e) { return ""; }
     }
 
     private void openAppByName(String appName) {
         PackageManager pm = getPackageManager();
         String targetPackage = "";
+        appName = appName.toLowerCase();
         if (appName.contains("wa") || appName.contains("whatsapp")) targetPackage = "com.whatsapp";
         else if (appName.contains("youtube")) targetPackage = "com.google.android.youtube";
         else if (appName.contains("ig") || appName.contains("instagram")) targetPackage = "com.instagram.android";
         else if (appName.contains("tiktok")) targetPackage = "com.zhiliaoapp.musically";
-        else if (appName.contains("chrome")) targetPackage = "com.android.chrome";
         
         if (!targetPackage.isEmpty()) {
             Intent launchIntent = pm.getLaunchIntentForPackage(targetPackage);
             if (launchIntent != null) {
+                launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                 startActivity(launchIntent);
-            } else {
-                Toast.makeText(this, "Aplikasi tidak ditemukan", Toast.LENGTH_SHORT).show();
             }
         }
     }
 
-    private void swipe(int startX, int startY, int endX, int endY) {
+    // Rekursif mencari EditText (Kotak Input)
+    private AccessibilityNodeInfo findNodeByClassName(AccessibilityNodeInfo node, String className) {
+        if (node == null) return null;
+        if (className.equals(node.getClassName().toString()) && node.isEditable()) {
+            return node;
+        }
+        for (int i = 0; i < node.getChildCount(); i++) {
+            AccessibilityNodeInfo result = findNodeByClassName(node.getChild(i), className);
+            if (result != null) return result;
+        }
+        return null;
+    }
+
+    // Rekursif mencari tombol/elemen berdasarkan teks dan mengkliknya
+    private boolean clickNodeByText(AccessibilityNodeInfo node, String text) {
+        if (node == null) return false;
+        CharSequence nodeText = node.getText();
+        CharSequence nodeDesc = node.getContentDescription();
+        
+        boolean match = (nodeText != null && nodeText.toString().toLowerCase().contains(text.toLowerCase())) ||
+                        (nodeDesc != null && nodeDesc.toString().toLowerCase().contains(text.toLowerCase()));
+                        
+        if (match && node.isClickable()) {
+            node.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+            return true;
+        }
+        
+        for (int i = 0; i < node.getChildCount(); i++) {
+            if (clickNodeByText(node.getChild(i), text)) return true;
+        }
+        return false;
+    }
+
+    private void swipe(int startX, int startY, int endX, int endY, int durationMs) {
         Path path = new Path();
         path.moveTo(startX, startY);
         path.lineTo(endX, endY);
         GestureDescription.Builder builder = new GestureDescription.Builder();
-        GestureDescription gestureDescription = builder.addStroke(new GestureDescription.StrokeDescription(path, 10, 400)).build();
-        dispatchGesture(gestureDescription, null, null);
+        builder.addStroke(new GestureDescription.StrokeDescription(path, 0, durationMs));
+        dispatchGesture(builder.build(), null, null);
     }
 }

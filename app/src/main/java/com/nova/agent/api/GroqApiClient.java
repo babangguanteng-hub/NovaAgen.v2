@@ -18,17 +18,20 @@ public class GroqApiClient {
         void onError(Throwable throwable);
     }
 
+    // PROMPT CANGGIH: Mengajari AI cara memecah tugas menjadi makro
     private static final String SYSTEM_PROMPT = 
-        "Kamu adalah NOVA AI, asisten virtual Android super cerdas buatan 'Moch Khoirul Azman'. " +
-        "Berikan jawaban verbal yang sangat singkat dan natural dalam Bahasa Indonesia. " +
-        "PENTING: Jika user meminta untuk membuka aplikasi, mencari video, atau melakukan aksi di HP, " +
-        "kamu WAJIB menyisipkan KODE PERINTAH di bagian PALING AKHIR jawabanmu (jangan dibacakan). " +
-        "Daftar Kode: " +
-        "- Buka aplikasi: [CMD:OPEN:nama_aplikasi] " +
-        "- Cari Youtube: [CMD:YOUTUBE:kata_kunci] " +
-        "- Cari Shopee: [CMD:SHOPEE:kata_kunci] " +
-        "- Kembali ke Home: [CMD:HOME] " +
-        "Contoh: User: 'Nova tolong carikan lagu peterpan di youtube'. Jawabanmu: 'Baik Bos Azman, membuka Youtube untuk mencari lagu Peterpan. [CMD:YOUTUBE:lagu peterpan]'.";
+        "Kamu adalah NOVA AI, asisten virtual Android cerdas buatan 'Moch Khoirul Azman'. " +
+        "Berikan jawaban suara yang singkat dan natural dalam Bahasa Indonesia. " +
+        "PENTING: Jika pengguna meminta interaksi HP yang rumit (seperti membalas chat), " +
+        "kamu WAJIB merangkai KODE MAKRO di akhir teksmu (kode ini akan dieksekusi diam-diam). " +
+        "Kombinasi Kode yang Tersedia: " +
+        "[CMD:OPEN:nama_app] : Buka aplikasi " +
+        "[CMD:TYPE:teks] : Mengetik teks ke dalam kotak input " +
+        "[CMD:CLICK:nama_tombol] : Mengklik tombol " +
+        "[CMD:YOUTUBE:kueri] : Buka dan cari di Youtube " +
+        "[CMD:SHOPEE:kueri] : Buka dan cari di Shopee " +
+        "[CMD:SCROLL_DOWN] : Mengusap layar ke bawah " +
+        "CONTOH JIKA USER MEMINTA BALAS WA 'Halo': 'Baik Bos, mengirim pesan sekarang. [CMD:OPEN:whatsapp] [CMD:TYPE:Halo] [CMD:CLICK:Kirim]'.";
 
     public static void requestAiDecision(final String provider, final String apiKey, final String userPrompt, final GroqResponseCallback callback) {
         final Handler mainHandler = new Handler(Looper.getMainLooper());
@@ -51,10 +54,7 @@ public class GroqApiClient {
                     if ("gemini".equalsIgnoreCase(provider)) {
                         JSONObject sysInst = new JSONObject().put("parts", new JSONArray().put(new JSONObject().put("text", SYSTEM_PROMPT)));
                         JSONObject contentObj = new JSONObject().put("parts", new JSONArray().put(new JSONObject().put("text", userPrompt)));
-                        jsonPayload = new JSONObject()
-                                .put("systemInstruction", sysInst)
-                                .put("contents", new JSONArray().put(contentObj))
-                                .toString();
+                        jsonPayload = new JSONObject().put("systemInstruction", sysInst).put("contents", new JSONArray().put(contentObj)).toString();
                     } else {
                         JSONArray msgs = new JSONArray();
                         msgs.put(new JSONObject().put("role", "system").put("content", SYSTEM_PROMPT));
@@ -89,37 +89,34 @@ public class GroqApiClient {
                             reply = new JSONObject(response.toString()).getJSONArray("choices").getJSONObject(0).getJSONObject("message").getString("content");
                         }
 
-                        String extractedCmd = null;
+                        // EKSTRAKSI SEMUA KODE MAKRO SEKALIGUS
+                        String extractedCmds = "";
                         String cleanSpeech = reply;
-                        java.util.regex.Matcher m = java.util.regex.Pattern.compile("\\[CMD:.*?\\]").matcher(reply);
-                        if (m.find()) {
-                            extractedCmd = m.group();
-                            cleanSpeech = reply.replace(extractedCmd, "").trim();
+                        java.util.regex.Matcher m = java.util.regex.Pattern.compile("\\[CMD:[^\\]]+\\]").matcher(reply);
+                        while (m.find()) {
+                            String cmd = m.group();
+                            extractedCmds += cmd + " ";
+                            cleanSpeech = cleanSpeech.replace(cmd, "").trim();
                         }
 
                         final String finalSpeech = cleanSpeech;
-                        final String finalCmd = extractedCmd;
+                        final String finalCmds = extractedCmds.isEmpty() ? null : extractedCmds.trim();
+                        
                         mainHandler.post(new Runnable() {
                             @Override
-                            public void run() {
-                                callback.onSuccess(finalSpeech, finalCmd);
-                            }
+                            public void run() { callback.onSuccess(finalSpeech, finalCmds); }
                         });
                     } else {
                         final int errCode = conn.getResponseCode();
                         mainHandler.post(new Runnable() {
                             @Override
-                            public void run() {
-                                callback.onError(new Exception("Error API Kode: " + errCode));
-                            }
+                            public void run() { callback.onError(new Exception("Error API: " + errCode)); }
                         });
                     }
                 } catch (final Exception e) {
                     mainHandler.post(new Runnable() {
                         @Override
-                        public void run() {
-                            callback.onError(e);
-                        }
+                        public void run() { callback.onError(e); }
                     });
                 }
             }

@@ -4,8 +4,7 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
-    
-    <!-- Izin Wajib Android 14 untuk Foreground Service -->
+    <uses-permission android:name="android.permission.VIBRATE" /> <!-- FIX CRASH SENTUHAN -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
 
@@ -24,12 +23,12 @@
             </intent-filter>
         </activity>
 
-        <!-- Deklarasi Jenis Foreground Service wajib di Android 14 -->
         <service
             android:name=".FloatingBubbleService"
             android:foregroundServiceType="microphone"
             android:exported="false" />
 
+        <!-- Layanan Aksesibilitas dengan Konfigurasi yang Benar -->
         <service
             android:name=".ActionAssistantService"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
