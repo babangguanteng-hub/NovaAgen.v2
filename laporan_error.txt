@@ -15,19 +15,10 @@ Recommendation: remove package="com.novaagent.app" from the source AndroidManife
 > Task :app:mergeDebugAssets
 > Task :app:compressDebugAssets
 > Task :app:processDebugJavaRes NO-SOURCE
-> Task :app:mergeDebugJavaResource
-> Task :app:desugarDebugFileDependencies
-> Task :app:mergeDebugJniLibFolders
-> Task :app:checkDebugDuplicateClasses
-> Task :app:mergeDebugNativeLibs NO-SOURCE
-> Task :app:stripDebugDebugSymbols NO-SOURCE
-> Task :app:mergeLibDexDebug
 > Task :app:processDebugManifestForPackage
-> Task :app:validateSigningDebug
-> Task :app:writeDebugAppMetadata
-> Task :app:writeDebugSigningConfigVersions
-> Task :app:mergeExtDexDebug
+> Task :app:mergeDebugJavaResource
 > Task :app:processDebugResources FAILED
+> Task :app:checkDebugDuplicateClasses
 
 FAILURE: Build failed with an exception.
 
