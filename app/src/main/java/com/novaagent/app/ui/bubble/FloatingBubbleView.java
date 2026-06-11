@@ -45,7 +45,7 @@ public class FloatingBubbleView implements BubbleViewModel.ViewCallback, EventBu
     private boolean isAgentRunning = false;
     
     private SpeechRecognizer speechRecognizer;
-    private TextToSpeech textToSpeech; // MULUT NOVA
+    private TextToSpeech textToSpeech; // INI VARIABEL YANG HILANG SEBELUMNYA
 
     public FloatingBubbleView(Context appContext, BubbleViewModel viewModel) {
         this.context = appContext;
@@ -62,27 +62,23 @@ public class FloatingBubbleView implements BubbleViewModel.ViewCallback, EventBu
     private void setupTextToSpeech() {
         textToSpeech = new TextToSpeech(context, status -> {
             if (status == TextToSpeech.SUCCESS) {
-                textToSpeech.setLanguage(new Locale("id", "ID")); // Bahasa Indonesia
-                textToSpeech.setSpeechRate(1.1f); // Agak cepat biar dapet aura sarkasnya
-                textToSpeech.setPitch(1.2f); // Pitch agak tinggi
+                textToSpeech.setLanguage(new Locale("id", "ID"));
+                textToSpeech.setSpeechRate(1.1f);
+                textToSpeech.setPitch(1.2f);
             }
         });
     }
 
-    // Mendengarkan respon Roasting dari AI untuk diucapkan
     @Override
     public void onEvent(AgentEvent event) {
         if (event.type == AgentEvent.EventType.VOICE_RECEIVED) {
             String speechText = (String) event.payload;
             if (textToSpeech != null && speechText != null && !speechText.isEmpty()) {
-                // Nova Berbicara!
                 textToSpeech.speak(speechText, TextToSpeech.QUEUE_FLUSH, null, null);
-                
-                // Update teks UI di main thread
                 new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
                     if(tvStatus != null) {
                         tvStatus.setText("Ngomong...");
-                        tvStatus.setTextColor(Color.parseColor("#FFFF00")); // Kuning saat ngomong
+                        tvStatus.setTextColor(Color.parseColor("#FFFF00"));
                     }
                 });
             }
@@ -113,8 +109,7 @@ public class FloatingBubbleView implements BubbleViewModel.ViewCallback, EventBu
                 @Override public void onResults(Bundle results) {
                     ArrayList<String> matches = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
                     if (matches != null && !matches.isEmpty()) {
-                        String spokenText = matches.get(0);
-                        startAgentTask(spokenText);
+                        startAgentTask(matches.get(0));
                     }
                 }
                 @Override public void onPartialResults(Bundle partialResults) {}
@@ -225,8 +220,7 @@ public class FloatingBubbleView implements BubbleViewModel.ViewCallback, EventBu
     }
 
     private void listenToVoice() {
-        if (textToSpeech != null && textToSpeech.isSpeaking()) textToSpeech.stop(); // Hentikan ngoceh kalau mau dengerin
-        
+        if (textToSpeech != null && textToSpeech.isSpeaking()) textToSpeech.stop(); 
         if (speechRecognizer != null) {
             Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
             intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
