@@ -11,8 +11,9 @@ public class ActionCommandDto {
     public final String action;
     public final int x;
     public final int y;
-    public final String text;       // DITAMBAHKAN: Untuk fitur mengetik
-    public final String direction;  // DITAMBAHKAN: Untuk fitur swipe/scroll
+    public final String text;       // Untuk fitur mengetik
+    public final String direction;  // Untuk fitur swipe/scroll
+    public final String speech;     // DITAMBAHKAN: Untuk fitur bicara/TTS
     public final String rawJson;
 
     public ActionCommandDto(String jsonString) throws JSONException {
@@ -23,5 +24,6 @@ public class ActionCommandDto {
         this.y = json.optInt("y", -1);
         this.text = json.optString("text", "");
         this.direction = json.optString("direction", "");
+        this.speech = json.optString("speech", ""); // DITAMBAHKAN
     }
 }
