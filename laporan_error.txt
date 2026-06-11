@@ -9,27 +9,24 @@
 > Task :app:generateDebugAssets UP-TO-DATE
 > Task :app:mergeDebugAssets
 > Task :app:compressDebugAssets
-> Task :app:processDebugJavaRes NO-SOURCE
-> Task :app:desugarDebugFileDependencies
-> Task :app:mergeDebugJniLibFolders
 > Task :app:processDebugManifestForPackage
-> Task :app:mergeDebugJavaResource
-> Task :app:checkDebugDuplicateClasses
+> Task :app:processDebugJavaRes NO-SOURCE
 > Task :app:processDebugResources
-> Task :app:mergeExtDexDebug
+> Task :app:mergeDebugJavaResource
 
 > Task :app:compileDebugJavaWithJavac
-/home/runner/work/NovaAgen.v2/NovaAgen.v2/app/src/main/java/com/novaagent/app/infrastructure/injector/SystemActionInjector.java:25: error: cannot find symbol
-        if (cmd.speech != null && !cmd.speech.isEmpty()) {
-               ^
-  symbol:   variable speech
+/home/runner/work/NovaAgen.v2/NovaAgen.v2/app/src/main/java/com/novaagent/app/infrastructure/injector/SystemActionInjector.java:48: error: cannot find symbol
+                success = service.typeTextInFocusedNode(cmd.textToType);
+                                                           ^
+  symbol:   variable textToType
   location: variable cmd of type ActionCommandDto
-/home/runner/work/NovaAgen.v2/NovaAgen.v2/app/src/main/java/com/novaagent/app/infrastructure/injector/SystemActionInjector.java:25: error: cannot find symbol
-        if (cmd.speech != null && !cmd.speech.isEmpty()) {
-                                      ^
-  symbol:   variable speech
+/home/runner/work/NovaAgen.v2/NovaAgen.v2/app/src/main/java/com/novaagent/app/infrastructure/injector/SystemActionInjector.java:53: error: cannot find symbol
+                if ("quick_settings".equals(cmd.globalAction)) success = service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_QUICK_SETTINGS);
+                                               ^
+  symbol:   variable globalAction
   location: variable cmd of type ActionCommandDto
-/home/runner/work/NovaAgen.v2/NovaAgen.v2/app/src/main/java/com/novaagent/app/infrastructure/injector/SystemActionInjector.java:26: error: cannot find symbol
-            EventBus.getInstance().publish(new AgentEvent(AgentEvent.EventType.VOICE_RECEIVED, cmd.speech));
-                                                                                                  ^
-  symbol:   variable speech
+/home/runner/work/NovaAgen.v2/NovaAgen.v2/app/src/main/java/com/novaagent/app/infrastructure/injector/SystemActionInjector.java:54: error: cannot find symbol
+                else if ("home".equals(cmd.globalAction)) success = service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME);
+                                          ^
+  symbol:   variable globalAction
+  location: variable cmd of type ActionCommandDto
