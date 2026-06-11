@@ -3,14 +3,16 @@ package com.novaagent.app.data.model;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+/**
+ * Merepresentasikan perintah fisik dari agen AI.
+ * Dikonversi dari JSON output Groq Llama-3.
+ */
 public class ActionCommandDto {
     public final String action;
     public final int x;
     public final int y;
-    public final String direction;
-    public final String textToType;
-    public final String globalAction;
-    public final String speech; // Tambahan untuk AI berbicara
+    public final String text;       // DITAMBAHKAN: Untuk fitur mengetik
+    public final String direction;  // DITAMBAHKAN: Untuk fitur swipe/scroll
     public final String rawJson;
 
     public ActionCommandDto(String jsonString) throws JSONException {
@@ -19,9 +21,7 @@ public class ActionCommandDto {
         this.action = json.optString("action", "unknown").toLowerCase();
         this.x = json.optInt("x", -1);
         this.y = json.optInt("y", -1);
+        this.text = json.optString("text", "");
         this.direction = json.optString("direction", "");
-        this.textToType = json.optString("text_to_type", "");
-        this.globalAction = json.optString("global_action", "");
-        this.speech = json.optString("speech", "");
     }
 }
