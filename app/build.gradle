@@ -3,33 +3,37 @@ plugins {
 }
 
 android {
-    namespace 'com.nova.agent'
-    compileSdk 34
+    namespace 'com.novaagent.app'
+    compileSdk 34 // Android 14
 
     defaultConfig {
-        applicationId "com.nova.agent"
-        minSdk 26
-        targetSdk 34
+        applicationId "com.novaagent.app"
+        minSdk 26 // Android 8.0 Minimal
+        targetSdk 33 // Target Android 13
         versionCode 1
-        versionName "1.0"
+        versionName "2.0-Blueprint"
     }
 
     buildTypes {
         release {
-            minifyEnabled false
+            minifyEnabled true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
-
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
     }
 }
 
 dependencies {
+    // UI Dasar
     implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'com.google.android.material:material:1.11.0'
-    implementation 'com.squareup.retrofit2:retrofit:2.9.0'
-    implementation 'com.squareup.retrofit2:converter-gson:2.9.0'
+    implementation 'com.google.android.material:material:1.10.0'
+    
+    // OCR Terang (ML Kit)
+    implementation 'com.google.android.gms:play-services-mlkit-text-recognition:19.0.0'
+    
+    // Networking (Ringan)
+    implementation 'com.squareup.okhttp3:okhttp:4.10.0'
 }

@@ -1,0 +1,8 @@
+find . \( -name "*.java" -o -name "*.xml" -o -name "*.gradle" \) -type f | while read f
+do
+  echo "==================================================" >> semua_source.txt
+  echo "FILE: $f" >> semua_source.txt
+  echo "==================================================" >> semua_source.txt
+  cat "$f" >> semua_source.txt
+  echo "" >> semua_source.txt
+done
