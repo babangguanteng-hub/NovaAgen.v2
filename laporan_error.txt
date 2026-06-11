@@ -11,6 +11,7 @@
 > Task :app:compressDebugAssets
 > Task :app:processDebugJavaRes NO-SOURCE
 > Task :app:desugarDebugFileDependencies
+> Task :app:mergeDebugJniLibFolders
 > Task :app:processDebugManifestForPackage
 > Task :app:mergeDebugJavaResource
 > Task :app:checkDebugDuplicateClasses
@@ -18,17 +19,17 @@
 > Task :app:mergeExtDexDebug
 
 > Task :app:compileDebugJavaWithJavac
-/home/runner/work/NovaAgen.v2/NovaAgen.v2/app/src/main/java/com/novaagent/app/core/engine/SafetyPolicyEngine.java:40: error: cannot find symbol
-        if (command.text != null && BLACKLIST_PATTERN.matcher(command.text).find()) {
-                   ^
-  symbol:   variable text
-  location: variable command of type ActionCommandDto
-/home/runner/work/NovaAgen.v2/NovaAgen.v2/app/src/main/java/com/novaagent/app/core/engine/SafetyPolicyEngine.java:40: error: cannot find symbol
-        if (command.text != null && BLACKLIST_PATTERN.matcher(command.text).find()) {
-                                                                     ^
-  symbol:   variable text
-  location: variable command of type ActionCommandDto
-/home/runner/work/NovaAgen.v2/NovaAgen.v2/app/src/main/java/com/novaagent/app/core/engine/SafetyPolicyEngine.java:42: error: cannot find symbol
-            reason = "Perintah mengandung kata kunci berbahaya: " + command.text;
-                                                                           ^
-  symbol:   variable text
+/home/runner/work/NovaAgen.v2/NovaAgen.v2/app/src/main/java/com/novaagent/app/infrastructure/injector/SystemActionInjector.java:25: error: cannot find symbol
+        if (cmd.speech != null && !cmd.speech.isEmpty()) {
+               ^
+  symbol:   variable speech
+  location: variable cmd of type ActionCommandDto
+/home/runner/work/NovaAgen.v2/NovaAgen.v2/app/src/main/java/com/novaagent/app/infrastructure/injector/SystemActionInjector.java:25: error: cannot find symbol
+        if (cmd.speech != null && !cmd.speech.isEmpty()) {
+                                      ^
+  symbol:   variable speech
+  location: variable cmd of type ActionCommandDto
+/home/runner/work/NovaAgen.v2/NovaAgen.v2/app/src/main/java/com/novaagent/app/infrastructure/injector/SystemActionInjector.java:26: error: cannot find symbol
+            EventBus.getInstance().publish(new AgentEvent(AgentEvent.EventType.VOICE_RECEIVED, cmd.speech));
+                                                                                                  ^
+  symbol:   variable speech
