@@ -19,7 +19,8 @@ import okhttp3.Response;
 public class GroqApiClient {
     private static final String TAG = "GroqApiClient";
     private static final String API_URL = "https://api.groq.com/openai/v1/chat/completions";
-    private static final String MODEL_NAME = "llama3-70b-8192";
+    // UPGRADE KE LLAMA 3.1
+    private static final String MODEL_NAME = "llama-3.1-70b-versatile"; 
     
     private final OkHttpClient client;
     private final Context context;
@@ -39,7 +40,6 @@ public class GroqApiClient {
     }
 
     public void sendPrompt(String systemPrompt, String userPrompt, GroqCallback callback) {
-        // AMBIL API KEY SECARA REAL-TIME (Mencegah bug kunci kosong)
         SharedPreferences prefs = context.getSharedPreferences("nova_config", Context.MODE_PRIVATE);
         String apiKey = prefs.getString("groq_api_key", "");
 
@@ -79,12 +79,12 @@ public class GroqApiClient {
             client.newCall(request).enqueue(new Callback() {
                 @Override
                 public void onFailure(Call call, IOException e) {
-                    callback.onError("Koneksi gagal: " + e.getMessage());
+                    callback.onError("Koneksi internet gagal nih boss!");
                 }
                 @Override
                 public void onResponse(Call call, Response response) throws IOException {
                     if (!response.isSuccessful()) {
-                        callback.onError("API Error: " + response.code() + " " + response.message());
+                        callback.onError("API Error: Pastikan API Key valid.");
                         return;
                     }
                     try {
@@ -96,12 +96,12 @@ public class GroqApiClient {
                                 .getString("content");
                         callback.onSuccess(content);
                     } catch (Exception e) {
-                        callback.onError("Parsing Gagal: " + e.getMessage());
+                        callback.onError("Gagal memahami respon Groq.");
                     }
                 }
             });
         } catch (Exception e) {
-            callback.onError("Request Error: " + e.getMessage());
+            callback.onError("Error Sistem Internal.");
         }
     }
 }

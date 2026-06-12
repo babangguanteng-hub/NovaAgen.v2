@@ -66,12 +66,13 @@ public class FloatingBubbleView implements BubbleViewModel.ViewCallback, EventBu
             if (status == TextToSpeech.SUCCESS) {
                 int result = textToSpeech.setLanguage(new Locale("id", "ID"));
                 if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
-                    // Fallback to English if Indonesian is not installed
                     textToSpeech.setLanguage(Locale.US);
-                    Toast.makeText(context, "Data TTS Bahasa Indonesia tidak ditemukan di HP ini. Nova akan pakai bahasa Inggris.", Toast.LENGTH_LONG).show();
                 }
                 textToSpeech.setSpeechRate(1.1f);
                 textToSpeech.setPitch(1.1f);
+                
+                // [DIAGNOSTIK] Nova akan menyapa saat TTS berhasil dimuat!
+                textToSpeech.speak("Sistem Nova Siap Boss!", TextToSpeech.QUEUE_FLUSH, null, null);
             }
         });
     }
@@ -131,14 +132,14 @@ public class FloatingBubbleView implements BubbleViewModel.ViewCallback, EventBu
         rootLayout.setOrientation(LinearLayout.VERTICAL);
         rootLayout.setGravity(Gravity.CENTER);
         
-        int bubbleSize = dpToPx(90); // Sedikit lebih estetik
+        int bubbleSize = dpToPx(90);
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(bubbleSize, bubbleSize);
         rootLayout.setLayoutParams(params);
 
         bgAurora = new GradientDrawable();
         bgAurora.setShape(GradientDrawable.OVAL);
-        bgAurora.setColor(Color.parseColor("#E60B0F19")); // Hitam Transparan
-        bgAurora.setStroke(dpToPx(2), Color.parseColor("#00FFFF")); // Tepi Neon Cyan
+        bgAurora.setColor(Color.parseColor("#E60B0F19"));
+        bgAurora.setStroke(dpToPx(2), Color.parseColor("#00FFFF"));
         rootLayout.setBackground(bgAurora);
 
         TextView tvTitle = new TextView(context);
@@ -201,7 +202,7 @@ public class FloatingBubbleView implements BubbleViewModel.ViewCallback, EventBu
                         float diffY = event.getRawY() - initialTouchY;
                         if (Math.abs(diffX) > 10 || Math.abs(diffY) > 10) {
                             isDragging = true;
-                            layoutParams.x = initialX - (int) diffX; // Geser kebalik karena Gravity.END
+                            layoutParams.x = initialX - (int) diffX;
                             layoutParams.y = initialY + (int) diffY;
                             windowManager.updateViewLayout(bubbleRootView, layoutParams);
                         }
@@ -228,7 +229,7 @@ public class FloatingBubbleView implements BubbleViewModel.ViewCallback, EventBu
             breathingAnimator.setRepeatMode(ValueAnimator.REVERSE);
             breathingAnimator.addUpdateListener(animator -> {
                 int alpha = (int) animator.getAnimatedValue();
-                bgAurora.setStroke(dpToPx(2), Color.argb(alpha, 224, 36, 255)); // E024FF
+                bgAurora.setStroke(dpToPx(2), Color.argb(alpha, 224, 36, 255));
             });
         }
         breathingAnimator.start();
@@ -313,11 +314,17 @@ public class FloatingBubbleView implements BubbleViewModel.ViewCallback, EventBu
     public void onError(String errorMessage) {
         new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
             if (tvStatus != null) {
-                tvStatus.setText("GAGAL: " + errorMessage.substring(0, Math.min(10, errorMessage.length())));
+                tvStatus.setText("GAGAL!");
                 tvStatus.setTextColor(Color.parseColor("#FF0055"));
                 stopBreathingEffect();
                 bgAurora.setStroke(dpToPx(2), Color.parseColor("#FF0055"));
-                bubbleRootView.postDelayed(this::stopAgent, 3000);
+                
+                // [DIAGNOSTIK] Nova akan mengeluh secara lisan jika gagal
+                if(textToSpeech != null) {
+                     textToSpeech.speak("Aduh, ada error boss! " + errorMessage, TextToSpeech.QUEUE_FLUSH, null, null);
+                }
+                
+                bubbleRootView.postDelayed(this::stopAgent, 4000);
             }
         });
     }
