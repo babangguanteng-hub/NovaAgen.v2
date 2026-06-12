@@ -16,7 +16,6 @@ import okhttp3.Response;
 
 public class GroqApiClient {
     private static final String API_URL = "https://api.groq.com/openai/v1/chat/completions";
-    // KEMBALI KE MODEL PALING STABIL
     private static final String MODEL_NAME = "llama3-70b-8192"; 
     
     private final OkHttpClient client;
@@ -50,10 +49,12 @@ public class GroqApiClient {
             payload.put("model", MODEL_NAME);
             payload.put("temperature", 0.5); 
             
-            // SENGAJA KITA HAPUS "response_format: json_object" KARENA SERING BIKIN ERROR 400 DI GROQ FREE
+            // AKTIFKAN LAGI JSON MODE RESMI GROQ
+            JSONObject responseFormat = new JSONObject();
+            responseFormat.put("type", "json_object");
+            payload.put("response_format", responseFormat);
 
             JSONArray messages = new JSONArray();
-            
             JSONObject systemMsg = new JSONObject();
             systemMsg.put("role", "system");
             systemMsg.put("content", systemPrompt);
@@ -67,14 +68,11 @@ public class GroqApiClient {
             payload.put("messages", messages);
 
             RequestBody body = RequestBody.create(payload.toString(), MediaType.parse("application/json; charset=utf-8"));
-            
-            // TOPENG PENYAMARAN AGAR DIKIRA MANUSIA (ANTI-BOT)
             Request request = new Request.Builder()
                     .url(API_URL)
                     .addHeader("Authorization", "Bearer " + apiKey)
-                    .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 13; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36")
+                    .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 13; SM-S918B) AppleWebKit/537.36")
                     .addHeader("Accept", "application/json")
-                    .addHeader("Connection", "keep-alive")
                     .post(body)
                     .build();
 
@@ -92,7 +90,6 @@ public class GroqApiClient {
                             JSONObject errObj = new JSONObject(errorBody);
                             exactError = errObj.getJSONObject("error").getString("message");
                         } catch (Exception ignored) {}
-                        
                         callback.onError(exactError);
                         return;
                     }
@@ -110,7 +107,7 @@ public class GroqApiClient {
                 }
             });
         } catch (Exception e) {
-            callback.onError("Error pada struktur sistem lokal.");
+            callback.onError("Error Sistem Lokal.");
         }
     }
 }
