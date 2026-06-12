@@ -2,7 +2,6 @@ package com.novaagent.app.data.repository;
 
 import android.content.Context;
 import android.content.SharedPreferences;
-import android.util.Log;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import java.io.IOException;
@@ -16,8 +15,8 @@ import okhttp3.RequestBody;
 import okhttp3.Response;
 
 public class GroqApiClient {
-    private static final String TAG = "GroqApiClient";
     private static final String API_URL = "https://api.groq.com/openai/v1/chat/completions";
+    // Tetap menggunakan Llama-3.1-70b
     private static final String MODEL_NAME = "llama-3.1-70b-versatile"; 
     
     private final OkHttpClient client;
@@ -39,7 +38,6 @@ public class GroqApiClient {
 
     public void sendPrompt(String systemPrompt, String userPrompt, GroqCallback callback) {
         SharedPreferences prefs = context.getSharedPreferences("nova_config", Context.MODE_PRIVATE);
-        // Hapus spasi gaib di awal/akhir kunci menggunakan .trim()
         String apiKey = prefs.getString("groq_api_key", "").trim();
 
         if (apiKey.isEmpty()) {
@@ -51,9 +49,8 @@ public class GroqApiClient {
             JSONObject payload = new JSONObject();
             payload.put("model", MODEL_NAME);
             
-            JSONObject responseFormat = new JSONObject();
-            responseFormat.put("type", "json_object");
-            payload.put("response_format", responseFormat);
+            // [ANTI HTTP 400]: Kita hapus 'response_format' strict JSON yang sering ditolak server.
+            // Penyaring Regex di ActionCommandDto kita sudah cukup untuk menangkap JSON-nya.
 
             JSONArray messages = new JSONArray();
             JSONObject systemMsg = new JSONObject();
@@ -83,8 +80,15 @@ public class GroqApiClient {
                 @Override
                 public void onResponse(Call call, Response response) throws IOException {
                     if (!response.isSuccessful()) {
-                        // KITA TAMPILKAN KODE ERROR ASLI DARI SERVER (Misal: HTTP 401 atau 429)
-                        callback.onError("HTTP " + response.code());
+                        // [DETEKTIF ERROR]: Menarik pesan asli dari dalam server Groq
+                        String errorBody = response.body() != null ? response.body().string() : "";
+                        String exactError = "HTTP " + response.code();
+                        try {
+                            JSONObject errObj = new JSONObject(errorBody);
+                            exactError = errObj.getJSONObject("error").getString("message");
+                        } catch (Exception ignored) {}
+                        
+                        callback.onError(exactError);
                         return;
                     }
                     try {
@@ -96,12 +100,12 @@ public class GroqApiClient {
                                 .getString("content");
                         callback.onSuccess(content);
                     } catch (Exception e) {
-                        callback.onError("Gagal baca JSON");
+                        callback.onError("Gagal baca JSON AI");
                     }
                 }
             });
         } catch (Exception e) {
-            callback.onError("Internal Sistem");
+            callback.onError("Internal Sistem Request");
         }
     }
 }

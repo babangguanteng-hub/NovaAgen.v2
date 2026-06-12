@@ -28,7 +28,6 @@ public class AutonomousLoopEngine implements EventBus.EventListener {
         this.actionInjector = new SystemActionInjector();
         this.mainHandler = new Handler(Looper.getMainLooper());
         
-        // Mendaftarkan telinga saraf ke EventBus
         EventBus.getInstance().subscribe(AgentEvent.EventType.SCREEN_UPDATED, this);
         EventBus.getInstance().subscribe(AgentEvent.EventType.ACTION_EXECUTED, this);
     }
@@ -61,17 +60,20 @@ public class AutonomousLoopEngine implements EventBus.EventListener {
         if (!isRunning) return;
 
         try {
-            // [ANTI-CRASH]: Menangkap data layar sebagai String, BUKAN JSONArray
             if (event.type == AgentEvent.EventType.SCREEN_UPDATED) {
                 String screenContext = String.valueOf(event.payload);
+                
+                // [ANTI HTTP 400]: Mencegah teks kepanjangan yang memicu error payload di Groq
+                if (screenContext.length() > 4000) {
+                    screenContext = screenContext.substring(0, 4000) + "\n...[Teks Layar Terpotong]";
+                }
+                
                 processWithAI(screenContext);
             } 
-            // [LOGIKA OTONOM]: Setelah Nova nge-klik/swipe, tunggu 2 detik, lalu scan layar lagi
             else if (event.type == AgentEvent.EventType.ACTION_EXECUTED) {
-                mainHandler.postDelayed(this::requestScreenData, 2000); // Tunggu UI HP berubah
+                mainHandler.postDelayed(this::requestScreenData, 2000);
             }
         } catch (Exception e) {
-            Log.e(TAG, "Error Engine", e);
             EventBus.getInstance().publish(new AgentEvent(AgentEvent.EventType.ERROR, "Error Internal Otak"));
             stopTask();
         }
@@ -87,17 +89,13 @@ public class AutonomousLoopEngine implements EventBus.EventListener {
                 if (!isRunning) return;
                 try {
                     ActionCommandDto cmd = new ActionCommandDto(jsonResponse);
-                    
-                    // Jika AI merasa tugasnya sudah selesai
                     if ("done".equalsIgnoreCase(cmd.action)) {
                         EventBus.getInstance().publish(new AgentEvent(AgentEvent.EventType.STATE_CHANGED, "TUGAS SELESAI"));
                         if (cmd.speech != null && !cmd.speech.isEmpty()) {
                             EventBus.getInstance().publish(new AgentEvent(AgentEvent.EventType.VOICE_RECEIVED, cmd.speech));
                         }
                         stopTask();
-                    } 
-                    // Jika AI merasa masih harus nge-klik / swipe layar
-                    else {
+                    } else {
                         EventBus.getInstance().publish(new AgentEvent(AgentEvent.EventType.STATE_CHANGED, "MENGEKSEKUSI..."));
                         actionInjector.executeAction(cmd);
                     }
