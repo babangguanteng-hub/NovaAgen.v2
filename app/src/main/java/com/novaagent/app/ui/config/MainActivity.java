@@ -1,9 +1,11 @@
 package com.novaagent.app.ui.config;
 
+import android.Manifest;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -14,12 +16,20 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
+
 import com.novaagent.app.R;
 import com.novaagent.app.services.accessibility.NovaAccessibilityService;
 import com.novaagent.app.services.foreground.NovaForegroundService;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public class MainActivity extends Activity {
     private SharedPreferences prefs;
+    private static final int PERMISSION_REQ_CODE = 1001;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -46,7 +56,7 @@ public class MainActivity extends Activity {
         });
 
         btnBattery.setOnClickListener(v -> requestBatteryOptimization());
-        btnPermissions.setOnClickListener(v -> checkAndRequestPermissions());
+        btnPermissions.setOnClickListener(v -> startPermissionWaterfall());
     }
 
     private void requestBatteryOptimization() {
@@ -65,28 +75,77 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void checkAndRequestPermissions() {
+    // --- ALUR PERIZINAN BERTAHAP (WATERFALL) ---
+
+    private void startPermissionWaterfall() {
         String apiKey = prefs.getString("groq_api_key", "");
         if(apiKey.isEmpty()) {
             Toast.makeText(this, "Isi dan Simpan API Key dulu!", Toast.LENGTH_LONG).show();
             return;
         }
 
+        // TAHAP 1: Minta Popup Izin Resmi Android (Mic & Notif)
+        if (requiresRuntimePermissions()) {
+            requestRuntimePermissions();
+            return; // Berhenti disini, lanjut setelah user klik Allow/Deny
+        }
+
+        // TAHAP 2: Minta Izin Mengambang (Overlay)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
             Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + getPackageName()));
             startActivity(intent);
-            Toast.makeText(this, "Aktifkan Izin Menampilkan di Atas Aplikasi Lain", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "IZINKAN: Ditampilkan di Atas Aplikasi Lain", Toast.LENGTH_LONG).show();
             return;
         }
 
+        // TAHAP 3: Minta Izin Aksesibilitas (Mata & Tangan AI)
         if (!isAccessibilityServiceEnabled(this, NovaAccessibilityService.class)) {
             Intent intent = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
             startActivity(intent);
-            Toast.makeText(this, "Aktifkan Nova Agent di menu Aksesibilitas", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "AKTIFKAN: Nova Agent di menu Aksesibilitas", Toast.LENGTH_LONG).show();
             return;
         }
 
+        // TAHAP 4: Semua Diizinkan! Nyalakan Mesin.
         startNovaService();
+    }
+
+    private boolean requiresRuntimePermissions() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) return true;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return true;
+        }
+        return false;
+    }
+
+    private void requestRuntimePermissions() {
+        List<String> permissions = new ArrayList<>();
+        permissions.add(Manifest.permission.RECORD_AUDIO);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissions.add(Manifest.permission.POST_NOTIFICATIONS);
+        }
+        ActivityCompat.requestPermissions(this, permissions.toArray(new String[0]), PERMISSION_REQ_CODE);
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == PERMISSION_REQ_CODE) {
+            boolean allGranted = true;
+            for (int result : grantResults) {
+                if (result != PackageManager.PERMISSION_GRANTED) {
+                    allGranted = false;
+                    break;
+                }
+            }
+            
+            if (allGranted) {
+                // Lanjut ke tahap berikutnya (Overlay / Accessibility)
+                startPermissionWaterfall(); 
+            } else {
+                Toast.makeText(this, "Nova BUTUH Izin Mikrofon untuk mendengar perintah Anda!", Toast.LENGTH_LONG).show();
+            }
+        }
     }
 
     private boolean isAccessibilityServiceEnabled(Context context, Class<?> accessibilityService) {
@@ -108,7 +167,7 @@ public class MainActivity extends Activity {
         } else {
             startService(serviceIntent);
         }
-        Toast.makeText(this, "Sistem Nova Online!", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, "SISTEM NOVA ONLINE! \uD83D\uDE80", Toast.LENGTH_SHORT).show();
         finish();
     }
 }
