@@ -13,8 +13,6 @@ import com.novaagent.app.services.accessibility.NovaAccessibilityService;
 public class SystemActionInjector {
     private static final String TAG = "SystemActionInjector";
 
-    public SystemActionInjector() {}
-
     public void executeAction(ActionCommandDto cmd) {
         NovaAccessibilityService service;
         try {
@@ -24,12 +22,12 @@ public class SystemActionInjector {
             return;
         }
 
-        // --- INI KUNCI UTAMANYA: Mengirimkan teks ke mulut Nova (TTS) ---
         if (cmd.speech != null && !cmd.speech.trim().isEmpty()) {
             EventBus.getInstance().publish(new AgentEvent(AgentEvent.EventType.VOICE_RECEIVED, cmd.speech));
         }
 
         boolean success = false;
+        // [ANTI-BUG 2]: Implementasi Seluruh Fisik (Tangan Nova)
         switch (cmd.action) {
             case "home":
                 success = service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME);
@@ -43,16 +41,21 @@ public class SystemActionInjector {
             case "quick_settings":
                 success = service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_QUICK_SETTINGS);
                 break;
-            case "done":
-                EventBus.getInstance().publish(new AgentEvent(AgentEvent.EventType.STATE_CHANGED, "TUGAS SELESAI"));
-                success = true;
+            case "type":
+            case "search":
+                success = service.typeTextInFocusedNode(cmd.textToType);
                 break;
             case "tap":
+            case "click":
                 success = executeTap(service, cmd.x, cmd.y);
                 break;
             case "swipe":
-                // Bypass sementara agar tidak error kompilasi
-                success = true; 
+            case "scroll":
+                success = executeSwipe(service, cmd.direction);
+                break;
+            case "done":
+                EventBus.getInstance().publish(new AgentEvent(AgentEvent.EventType.STATE_CHANGED, "TUGAS SELESAI"));
+                success = true;
                 break;
             default:
                 Log.w(TAG, "Aksi tidak dikenali: " + cmd.action);
@@ -72,16 +75,29 @@ public class SystemActionInjector {
         Path clickPath = new Path();
         clickPath.moveTo(x, y);
         GestureDescription.Builder builder = new GestureDescription.Builder();
-        builder.addStroke(new GestureDescription.StrokeDescription(clickPath, 0, 100));
-        return service.dispatchGesture(builder.build(), new AccessibilityService.GestureResultCallback() {
-            @Override
-            public void onCompleted(GestureDescription gestureDescription) {
-                EventBus.getInstance().publish(new AgentEvent(AgentEvent.EventType.ACTION_EXECUTED, "tap"));
-            }
-            @Override
-            public void onCancelled(GestureDescription gestureDescription) {
-                EventBus.getInstance().publish(new AgentEvent(AgentEvent.EventType.ACTION_FAILED, "tap"));
-            }
-        }, null);
+        builder.addStroke(new GestureDescription.StrokeDescription(clickPath, 0, 100)); // 100ms ketukan
+        return service.dispatchGesture(builder.build(), null, null);
+    }
+
+    private boolean executeSwipe(NovaAccessibilityService service, String direction) {
+        Path swipePath = new Path();
+        // Asumsi resolusi layar rata-rata Android Go (X: 720, Y: 1280)
+        int centerX = 360, centerY = 640;
+        
+        if ("up".equalsIgnoreCase(direction)) {
+            swipePath.moveTo(centerX, 1000); swipePath.lineTo(centerX, 200); // Scroll kebawah (Jari keatas)
+        } else if ("down".equalsIgnoreCase(direction)) {
+            swipePath.moveTo(centerX, 200); swipePath.lineTo(centerX, 1000);
+        } else if ("left".equalsIgnoreCase(direction)) {
+            swipePath.moveTo(600, centerY); swipePath.lineTo(100, centerY);
+        } else if ("right".equalsIgnoreCase(direction)) {
+            swipePath.moveTo(100, centerY); swipePath.lineTo(600, centerY);
+        } else {
+            return false;
+        }
+
+        GestureDescription.Builder builder = new GestureDescription.Builder();
+        builder.addStroke(new GestureDescription.StrokeDescription(swipePath, 0, 400)); // 400ms geseran halus
+        return service.dispatchGesture(builder.build(), null, null);
     }
 }
