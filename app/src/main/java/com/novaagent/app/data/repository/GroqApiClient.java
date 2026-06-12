@@ -16,8 +16,7 @@ import okhttp3.Response;
 
 public class GroqApiClient {
     private static final String API_URL = "https://api.groq.com/openai/v1/chat/completions";
-    // Tetap menggunakan Llama-3.1-70b
-    private static final String MODEL_NAME = "llama-3.1-70b-versatile"; 
+    private static final String MODEL_NAME = "llama3-70b-8192"; 
     
     private final OkHttpClient client;
     private final Context context;
@@ -30,9 +29,9 @@ public class GroqApiClient {
     public GroqApiClient(Context context) {
         this.context = context;
         client = new OkHttpClient.Builder()
-                .connectTimeout(20, TimeUnit.SECONDS)
-                .readTimeout(40, TimeUnit.SECONDS)
-                .writeTimeout(20, TimeUnit.SECONDS)
+                .connectTimeout(15, TimeUnit.SECONDS)
+                .readTimeout(30, TimeUnit.SECONDS)
+                .writeTimeout(15, TimeUnit.SECONDS)
                 .build();
     }
 
@@ -41,18 +40,21 @@ public class GroqApiClient {
         String apiKey = prefs.getString("groq_api_key", "").trim();
 
         if (apiKey.isEmpty()) {
-            callback.onError("API Key kosong!");
+            callback.onError("API Key kosong! Isi di menu awal.");
             return;
         }
 
         try {
             JSONObject payload = new JSONObject();
             payload.put("model", MODEL_NAME);
+            payload.put("temperature", 0.5); 
             
-            // [ANTI HTTP 400]: Kita hapus 'response_format' strict JSON yang sering ditolak server.
-            // Penyaring Regex di ActionCommandDto kita sudah cukup untuk menangkap JSON-nya.
+            JSONObject responseFormat = new JSONObject();
+            responseFormat.put("type", "json_object");
+            payload.put("response_format", responseFormat);
 
             JSONArray messages = new JSONArray();
+            
             JSONObject systemMsg = new JSONObject();
             systemMsg.put("role", "system");
             systemMsg.put("content", systemPrompt);
@@ -66,9 +68,14 @@ public class GroqApiClient {
             payload.put("messages", messages);
 
             RequestBody body = RequestBody.create(payload.toString(), MediaType.parse("application/json; charset=utf-8"));
+            
+            // [TOPENG PENYAMARAN]: Kita tambahkan Header palsu agar dikira manusia/browser resmi
             Request request = new Request.Builder()
                     .url(API_URL)
                     .addHeader("Authorization", "Bearer " + apiKey)
+                    .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 13; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36")
+                    .addHeader("Accept", "application/json")
+                    .addHeader("Connection", "keep-alive")
                     .post(body)
                     .build();
 
@@ -80,7 +87,6 @@ public class GroqApiClient {
                 @Override
                 public void onResponse(Call call, Response response) throws IOException {
                     if (!response.isSuccessful()) {
-                        // [DETEKTIF ERROR]: Menarik pesan asli dari dalam server Groq
                         String errorBody = response.body() != null ? response.body().string() : "";
                         String exactError = "HTTP " + response.code();
                         try {
@@ -100,12 +106,12 @@ public class GroqApiClient {
                                 .getString("content");
                         callback.onSuccess(content);
                     } catch (Exception e) {
-                        callback.onError("Gagal baca JSON AI");
+                        callback.onError("Gagal memahami struktur AI");
                     }
                 }
             });
         } catch (Exception e) {
-            callback.onError("Internal Sistem Request");
+            callback.onError("Error pada struktur sistem lokal.");
         }
     }
 }
