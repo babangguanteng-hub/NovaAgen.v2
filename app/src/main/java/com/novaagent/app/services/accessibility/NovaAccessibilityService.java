@@ -8,11 +8,11 @@ import android.util.Log;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
 import com.novaagent.app.core.di.ServiceLocator;
+import com.novaagent.app.core.bus.EventBus;
+import com.novaagent.app.core.bus.AgentEvent;
 
 public class NovaAccessibilityService extends AccessibilityService {
     private static final String TAG = "NovaA11yService";
-    
-    // Menyimpan denah layar terakhir
     private String lastScreenContext = "Layar Kosong";
 
     @Override
@@ -29,7 +29,6 @@ public class NovaAccessibilityService extends AccessibilityService {
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {
         try {
-            // [ANTI-BUG 4]: Hanya baca layar saat ada perubahan besar, hemat RAM Android Go
             if (event.getEventType() == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
                 AccessibilityNodeInfo rootNode = getRootInActiveWindow();
                 if (rootNode != null) {
@@ -44,7 +43,6 @@ public class NovaAccessibilityService extends AccessibilityService {
         }
     }
 
-    // [ANTI-BUG 1]: Fungsi Rekursif Pemindai Layar (Mata Nova)
     private void parseNodeTree(AccessibilityNodeInfo node, StringBuilder sb) {
         if (node == null) return;
         
@@ -56,8 +54,6 @@ public class NovaAccessibilityService extends AccessibilityService {
             if (!nodeText.isEmpty() && (node.isClickable() || node.isScrollable() || node.isEditable())) {
                 Rect bounds = new Rect();
                 node.getBoundsInScreen(bounds);
-                
-                // Format: [Tipe] "Teks" (X, Y)
                 String type = node.isEditable() ? "Input" : (node.isClickable() ? "Button" : "Text");
                 sb.append("[").append(type).append("] ")
                   .append("\"").append(nodeText).append("\" ")
@@ -70,7 +66,6 @@ public class NovaAccessibilityService extends AccessibilityService {
         }
     }
 
-    // Dipanggil oleh Otak AI saat butuh melihat layar
     public String getCurrentScreenContext() {
         AccessibilityNodeInfo rootNode = getRootInActiveWindow();
         if (rootNode != null) {
@@ -82,7 +77,15 @@ public class NovaAccessibilityService extends AccessibilityService {
         return lastScreenContext.isEmpty() ? "Tidak ada elemen yang bisa diklik." : lastScreenContext;
     }
 
-    // Fitur Mengetik Otomatis
+    // =========================================================
+    // INI DIA FUNGSI YANG HILANG DAN DICARI OLEH OTAK AI
+    // =========================================================
+    public void requestScreenScan() {
+        String screenData = getCurrentScreenContext();
+        // Mengirimkan denah layar ke Otak AI melalui Saraf EventBus
+        EventBus.getInstance().publish(new AgentEvent(AgentEvent.EventType.SCREEN_UPDATED, screenData));
+    }
+
     public boolean typeTextInFocusedNode(String text) {
         AccessibilityNodeInfo rootNode = getRootInActiveWindow();
         if (rootNode == null) return false;
