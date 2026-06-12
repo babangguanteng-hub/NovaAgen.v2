@@ -3,7 +3,6 @@ package com.novaagent.app.core.engine;
 import android.content.Context;
 import android.os.Handler;
 import android.os.Looper;
-import android.util.Log;
 import com.novaagent.app.core.bus.AgentEvent;
 import com.novaagent.app.core.bus.EventBus;
 import com.novaagent.app.data.model.ActionCommandDto;
@@ -14,7 +13,6 @@ import com.novaagent.app.services.accessibility.NovaAccessibilityService;
 import com.novaagent.app.core.di.ServiceLocator;
 
 public class AutonomousLoopEngine implements EventBus.EventListener {
-    private static final String TAG = "AutoLoopEngine";
     private final Context context;
     private final GroqApiClient groqClient;
     private final SystemActionInjector actionInjector;
@@ -27,7 +25,6 @@ public class AutonomousLoopEngine implements EventBus.EventListener {
         this.groqClient = new GroqApiClient(context);
         this.actionInjector = new SystemActionInjector();
         this.mainHandler = new Handler(Looper.getMainLooper());
-        
         EventBus.getInstance().subscribe(AgentEvent.EventType.SCREEN_UPDATED, this);
         EventBus.getInstance().subscribe(AgentEvent.EventType.ACTION_EXECUTED, this);
     }
@@ -35,7 +32,7 @@ public class AutonomousLoopEngine implements EventBus.EventListener {
     public void startTask(String task) {
         this.currentTask = task;
         this.isRunning = true;
-        EventBus.getInstance().publish(new AgentEvent(AgentEvent.EventType.STATE_CHANGED, "MEMINDAI LAYAR..."));
+        EventBus.getInstance().publish(new AgentEvent(AgentEvent.EventType.STATE_CHANGED, "MEMINDAI..."));
         requestScreenData();
     }
 
@@ -50,7 +47,6 @@ public class AutonomousLoopEngine implements EventBus.EventListener {
             NovaAccessibilityService service = ServiceLocator.getInstance().resolve(NovaAccessibilityService.class);
             service.requestScreenScan();
         } catch (Exception e) {
-            EventBus.getInstance().publish(new AgentEvent(AgentEvent.EventType.ERROR, "Aksesibilitas belum siap"));
             stopTask();
         }
     }
@@ -59,31 +55,20 @@ public class AutonomousLoopEngine implements EventBus.EventListener {
     public void onEvent(AgentEvent event) {
         if (!isRunning) return;
 
-        try {
-            if (event.type == AgentEvent.EventType.SCREEN_UPDATED) {
-                String screenContext = String.valueOf(event.payload);
-                
-                // [PEMBERSIH TEKS LAYAR]: Membuang karakter aneh yang bikin Groq error 400
-                screenContext = screenContext.replaceAll("[^a-zA-Z0-9 \\n()\\[\\]\"',.:/_-]", "");
-                
-                // [PEMBATAS MEMORI]: Maksimal 2000 karakter agar JSON aman dan API tidak menolak
-                if (screenContext.length() > 2000) {
-                    screenContext = screenContext.substring(0, 2000) + "\n...[Dipotong]";
-                }
-                
-                processWithAI(screenContext);
-            } 
-            else if (event.type == AgentEvent.EventType.ACTION_EXECUTED) {
-                mainHandler.postDelayed(this::requestScreenData, 2000);
-            }
-        } catch (Exception e) {
-            EventBus.getInstance().publish(new AgentEvent(AgentEvent.EventType.ERROR, "Error Internal Otak"));
-            stopTask();
+        if (event.type == AgentEvent.EventType.SCREEN_UPDATED) {
+            String screenContext = String.valueOf(event.payload).replaceAll("[^a-zA-Z0-9 \\n()\\[\\]\"',.:/_-]", "");
+            if (screenContext.length() > 2000) screenContext = screenContext.substring(0, 2000);
+            processWithAI(screenContext);
+        } 
+        else if (event.type == AgentEvent.EventType.ACTION_EXECUTED) {
+            // [PENTING]: Aplikasi seperti YouTube butuh waktu loading setelah diklik
+            // Jeda 4 detik sebelum AI memindai layar lagi untuk mengambil langkah berikutnya
+            mainHandler.postDelayed(this::requestScreenData, 4000);
         }
     }
 
     private void processWithAI(String screenContext) {
-        EventBus.getInstance().publish(new AgentEvent(AgentEvent.EventType.STATE_CHANGED, "OTAK BERPIKIR..."));
+        EventBus.getInstance().publish(new AgentEvent(AgentEvent.EventType.STATE_CHANGED, "BERPIKIR..."));
         String userPrompt = PromptRegistry.buildUserPrompt(currentTask, screenContext);
 
         groqClient.sendPrompt(PromptRegistry.SYSTEM_PROMPT, userPrompt, new GroqApiClient.GroqCallback() {
@@ -94,20 +79,16 @@ public class AutonomousLoopEngine implements EventBus.EventListener {
                     ActionCommandDto cmd = new ActionCommandDto(jsonResponse);
                     if ("done".equalsIgnoreCase(cmd.action)) {
                         EventBus.getInstance().publish(new AgentEvent(AgentEvent.EventType.STATE_CHANGED, "TUGAS SELESAI"));
-                        if (cmd.speech != null && !cmd.speech.isEmpty()) {
-                            EventBus.getInstance().publish(new AgentEvent(AgentEvent.EventType.VOICE_RECEIVED, cmd.speech));
-                        }
+                        if (cmd.speech != null && !cmd.speech.isEmpty()) EventBus.getInstance().publish(new AgentEvent(AgentEvent.EventType.VOICE_RECEIVED, cmd.speech));
                         stopTask();
                     } else {
-                        EventBus.getInstance().publish(new AgentEvent(AgentEvent.EventType.STATE_CHANGED, "MENGEKSEKUSI..."));
+                        EventBus.getInstance().publish(new AgentEvent(AgentEvent.EventType.STATE_CHANGED, "EKSEKUSI..."));
                         actionInjector.executeAction(cmd);
                     }
                 } catch (Exception e) {
-                    EventBus.getInstance().publish(new AgentEvent(AgentEvent.EventType.ERROR, "Format AI Salah"));
                     stopTask();
                 }
             }
-
             @Override
             public void onError(String errorMessage) {
                 if (!isRunning) return;

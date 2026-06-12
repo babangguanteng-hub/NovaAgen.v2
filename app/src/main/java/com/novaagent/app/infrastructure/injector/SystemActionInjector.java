@@ -2,13 +2,20 @@ package com.novaagent.app.infrastructure.injector;
 
 import android.accessibilityservice.AccessibilityService;
 import android.accessibilityservice.GestureDescription;
+import android.content.Context;
+import android.content.Intent;
+import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageManager;
 import android.graphics.Path;
+import android.media.AudioManager;
 import android.util.Log;
 import com.novaagent.app.core.bus.AgentEvent;
 import com.novaagent.app.core.bus.EventBus;
 import com.novaagent.app.core.di.ServiceLocator;
 import com.novaagent.app.data.model.ActionCommandDto;
 import com.novaagent.app.services.accessibility.NovaAccessibilityService;
+
+import java.util.List;
 
 public class SystemActionInjector {
     private static final String TAG = "SystemActionInjector";
@@ -18,7 +25,6 @@ public class SystemActionInjector {
         try {
             service = ServiceLocator.getInstance().resolve(NovaAccessibilityService.class);
         } catch (Exception e) {
-            EventBus.getInstance().publish(new AgentEvent(AgentEvent.EventType.ACTION_FAILED, "NO_ACCESSIBILITY_SERVICE"));
             return;
         }
 
@@ -27,31 +33,37 @@ public class SystemActionInjector {
         }
 
         boolean success = false;
-        // [ANTI-BUG 2]: Implementasi Seluruh Fisik (Tangan Nova)
         switch (cmd.action) {
-            case "home":
-                success = service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME);
+            case "open_app":
+                success = openAppByName(service, cmd.textToType);
                 break;
-            case "back":
-                success = service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK);
+            case "volume_up":
+                success = adjustVolume(service, AudioManager.ADJUST_RAISE);
                 break;
-            case "recents":
-                success = service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_RECENTS);
+            case "volume_down":
+                success = adjustVolume(service, AudioManager.ADJUST_LOWER);
                 break;
-            case "quick_settings":
-                success = service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_QUICK_SETTINGS);
+            case "home": success = service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME); break;
+            case "back": success = service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK); break;
+            case "recents": success = service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_RECENTS); break;
+            case "quick_settings": success = service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_QUICK_SETTINGS); break;
+            case "tap": 
+            case "click": 
+                success = executeTap(service, cmd.x, cmd.y); 
+                break;
+            case "swipe": 
+            case "scroll": 
+                success = executeSwipe(service, cmd.direction); 
                 break;
             case "type":
-            case "search":
-                success = service.typeTextInFocusedNode(cmd.textToType);
+                executeTap(service, cmd.x, cmd.y);
+                try { Thread.sleep(800); } catch (Exception ignored) {} 
+                success = service.typeTextAtCoordinate(cmd.x, cmd.y, cmd.textToType);
                 break;
-            case "tap":
-            case "click":
-                success = executeTap(service, cmd.x, cmd.y);
-                break;
-            case "swipe":
-            case "scroll":
-                success = executeSwipe(service, cmd.direction);
+            case "press_enter":
+                // Mengetuk area keyboard virtual bagian kanan bawah (Tombol Cari / Enter)
+                // Resolusi standar, titik estimasi x: 650, y: 1200
+                success = executeTap(service, 650, 1200);
                 break;
             case "done":
                 EventBus.getInstance().publish(new AgentEvent(AgentEvent.EventType.STATE_CHANGED, "TUGAS SELESAI"));
@@ -61,13 +73,38 @@ public class SystemActionInjector {
                 Log.w(TAG, "Aksi tidak dikenali: " + cmd.action);
         }
 
-        if (!cmd.action.equals("tap") && !cmd.action.equals("swipe")) {
-            if (success) {
-                EventBus.getInstance().publish(new AgentEvent(AgentEvent.EventType.ACTION_EXECUTED, cmd.action));
-            } else {
-                EventBus.getInstance().publish(new AgentEvent(AgentEvent.EventType.ACTION_FAILED, cmd.action));
+        if (!cmd.action.equals("done")) {
+            // Beri tahu AI bahwa tangan sudah selesai bergerak, lanjut scan layar lagi
+            EventBus.getInstance().publish(new AgentEvent(AgentEvent.EventType.ACTION_EXECUTED, cmd.action));
+        }
+    }
+
+    private boolean adjustVolume(Context context, int direction) {
+        AudioManager audioManager = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
+        if (audioManager != null) {
+            audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, direction, AudioManager.FLAG_SHOW_UI);
+            return true;
+        }
+        return false;
+    }
+
+    private boolean openAppByName(Context context, String appName) {
+        if (appName == null || appName.isEmpty()) return false;
+        PackageManager pm = context.getPackageManager();
+        List<ApplicationInfo> packages = pm.getInstalledApplications(PackageManager.GET_META_DATA);
+        
+        for (ApplicationInfo packageInfo : packages) {
+            String label = pm.getApplicationLabel(packageInfo).toString().toLowerCase();
+            if (label.contains(appName.toLowerCase())) {
+                Intent intent = pm.getLaunchIntentForPackage(packageInfo.packageName);
+                if (intent != null) {
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    context.startActivity(intent);
+                    return true;
+                }
             }
         }
+        return false;
     }
 
     private boolean executeTap(NovaAccessibilityService service, int x, int y) {
@@ -75,29 +112,18 @@ public class SystemActionInjector {
         Path clickPath = new Path();
         clickPath.moveTo(x, y);
         GestureDescription.Builder builder = new GestureDescription.Builder();
-        builder.addStroke(new GestureDescription.StrokeDescription(clickPath, 0, 100)); // 100ms ketukan
+        builder.addStroke(new GestureDescription.StrokeDescription(clickPath, 0, 100));
         return service.dispatchGesture(builder.build(), null, null);
     }
 
     private boolean executeSwipe(NovaAccessibilityService service, String direction) {
         Path swipePath = new Path();
-        // Asumsi resolusi layar rata-rata Android Go (X: 720, Y: 1280)
         int centerX = 360, centerY = 640;
-        
-        if ("up".equalsIgnoreCase(direction)) {
-            swipePath.moveTo(centerX, 1000); swipePath.lineTo(centerX, 200); // Scroll kebawah (Jari keatas)
-        } else if ("down".equalsIgnoreCase(direction)) {
-            swipePath.moveTo(centerX, 200); swipePath.lineTo(centerX, 1000);
-        } else if ("left".equalsIgnoreCase(direction)) {
-            swipePath.moveTo(600, centerY); swipePath.lineTo(100, centerY);
-        } else if ("right".equalsIgnoreCase(direction)) {
-            swipePath.moveTo(100, centerY); swipePath.lineTo(600, centerY);
-        } else {
-            return false;
-        }
-
+        if ("up".equalsIgnoreCase(direction)) { swipePath.moveTo(centerX, 1000); swipePath.lineTo(centerX, 200); } 
+        else if ("down".equalsIgnoreCase(direction)) { swipePath.moveTo(centerX, 200); swipePath.lineTo(centerX, 1000); } 
+        else { return false; }
         GestureDescription.Builder builder = new GestureDescription.Builder();
-        builder.addStroke(new GestureDescription.StrokeDescription(swipePath, 0, 400)); // 400ms geseran halus
+        builder.addStroke(new GestureDescription.StrokeDescription(swipePath, 0, 400));
         return service.dispatchGesture(builder.build(), null, null);
     }
 }
