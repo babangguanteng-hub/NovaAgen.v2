@@ -49,10 +49,10 @@ public class GroqApiClient {
             payload.put("model", MODEL_NAME);
             payload.put("temperature", 0.5); 
             
-            // AKTIFKAN LAGI JSON MODE RESMI GROQ
-            JSONObject responseFormat = new JSONObject();
-            responseFormat.put("type", "json_object");
-            payload.put("response_format", responseFormat);
+            // ========================================================
+            // ☢️ NUCLEAR OPTION: KITA HAPUS PAKSAAN "response_format"
+            // Groq tidak akan lagi melakukan validasi JSON kaku yang bikin error!
+            // ========================================================
 
             JSONArray messages = new JSONArray();
             JSONObject systemMsg = new JSONObject();
@@ -71,7 +71,7 @@ public class GroqApiClient {
             Request request = new Request.Builder()
                     .url(API_URL)
                     .addHeader("Authorization", "Bearer " + apiKey)
-                    .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 13; SM-S918B) AppleWebKit/537.36")
+                    .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 13; SM-S918B)")
                     .addHeader("Accept", "application/json")
                     .post(body)
                     .build();
