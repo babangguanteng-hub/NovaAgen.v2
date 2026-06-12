@@ -2,6 +2,9 @@ package com.novaagent.app.ui.config;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -38,6 +41,12 @@ public class MainActivity extends Activity {
 
         prefs = getSharedPreferences("nova_config", MODE_PRIVATE);
 
+        // --- SISTEM PEMBACA BLACK BOX ---
+        String crashLog = prefs.getString("last_crash_log", "");
+        if (!crashLog.isEmpty()) {
+            showCrashReportDialog(crashLog);
+        }
+
         EditText etApiKey = findViewById(R.id.etApiKey);
         Button btnSave = findViewById(R.id.btnSave);
         Button btnBattery = findViewById(R.id.btnBattery);
@@ -59,6 +68,23 @@ public class MainActivity extends Activity {
         btnPermissions.setOnClickListener(v -> startPermissionWaterfall());
     }
 
+    private void showCrashReportDialog(String crashLog) {
+        new AlertDialog.Builder(this)
+            .setTitle("⚠️ LAPORAN KERUSAKAN (CRASH)")
+            .setMessage("Nova baru saja berhenti secara tidak normal. Laporan:\n\n" + crashLog)
+            .setCancelable(false)
+            .setPositiveButton("SALIN & TUTUP", (dialog, which) -> {
+                ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+                ClipData clip = ClipData.newPlainText("Crash Log", crashLog);
+                clipboard.setPrimaryClip(clip);
+                
+                // Hapus log setelah disalin agar tidak muncul terus
+                prefs.edit().remove("last_crash_log").apply();
+                Toast.makeText(this, "Tersalin! Paste ke obrolan AI Anda.", Toast.LENGTH_LONG).show();
+            })
+            .show();
+    }
+
     private void requestBatteryOptimization() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             Intent intent = new Intent();
@@ -68,14 +94,11 @@ public class MainActivity extends Activity {
                 intent.setAction(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
                 intent.setData(Uri.parse("package:" + packageName));
                 startActivity(intent);
-                Toast.makeText(this, "Pilih 'Izinkan' agar Nova tidak mati sendiri.", Toast.LENGTH_LONG).show();
             } else {
                 Toast.makeText(this, "Baterai sudah dibebaskan. Nova aman!", Toast.LENGTH_SHORT).show();
             }
         }
     }
-
-    // --- ALUR PERIZINAN BERTAHAP (WATERFALL) ---
 
     private void startPermissionWaterfall() {
         String apiKey = prefs.getString("groq_api_key", "");
@@ -84,13 +107,11 @@ public class MainActivity extends Activity {
             return;
         }
 
-        // TAHAP 1: Minta Popup Izin Resmi Android (Mic & Notif)
         if (requiresRuntimePermissions()) {
             requestRuntimePermissions();
-            return; // Berhenti disini, lanjut setelah user klik Allow/Deny
+            return; 
         }
 
-        // TAHAP 2: Minta Izin Mengambang (Overlay)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
             Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + getPackageName()));
             startActivity(intent);
@@ -98,7 +119,6 @@ public class MainActivity extends Activity {
             return;
         }
 
-        // TAHAP 3: Minta Izin Aksesibilitas (Mata & Tangan AI)
         if (!isAccessibilityServiceEnabled(this, NovaAccessibilityService.class)) {
             Intent intent = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
             startActivity(intent);
@@ -106,7 +126,6 @@ public class MainActivity extends Activity {
             return;
         }
 
-        // TAHAP 4: Semua Diizinkan! Nyalakan Mesin.
         startNovaService();
     }
 
@@ -138,13 +157,7 @@ public class MainActivity extends Activity {
                     break;
                 }
             }
-            
-            if (allGranted) {
-                // Lanjut ke tahap berikutnya (Overlay / Accessibility)
-                startPermissionWaterfall(); 
-            } else {
-                Toast.makeText(this, "Nova BUTUH Izin Mikrofon untuk mendengar perintah Anda!", Toast.LENGTH_LONG).show();
-            }
+            if (allGranted) startPermissionWaterfall(); 
         }
     }
 
