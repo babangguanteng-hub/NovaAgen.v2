@@ -1,5 +1,6 @@
 package com.novaagent.app.ui.bubble;
 
+import android.animation.ValueAnimator;
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.Intent;
@@ -40,12 +41,13 @@ public class FloatingBubbleView implements BubbleViewModel.ViewCallback, EventBu
     
     private TextView tvStatus;
     private GradientDrawable bgAurora;
+    private ValueAnimator breathingAnimator;
     
     private boolean isAddedToWindow = false;
     private boolean isAgentRunning = false;
     
     private SpeechRecognizer speechRecognizer;
-    private TextToSpeech textToSpeech; // INI VARIABEL YANG HILANG SEBELUMNYA
+    private TextToSpeech textToSpeech;
 
     public FloatingBubbleView(Context appContext, BubbleViewModel viewModel) {
         this.context = appContext;
@@ -62,9 +64,14 @@ public class FloatingBubbleView implements BubbleViewModel.ViewCallback, EventBu
     private void setupTextToSpeech() {
         textToSpeech = new TextToSpeech(context, status -> {
             if (status == TextToSpeech.SUCCESS) {
-                textToSpeech.setLanguage(new Locale("id", "ID"));
+                int result = textToSpeech.setLanguage(new Locale("id", "ID"));
+                if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
+                    // Fallback to English if Indonesian is not installed
+                    textToSpeech.setLanguage(Locale.US);
+                    Toast.makeText(context, "Data TTS Bahasa Indonesia tidak ditemukan di HP ini. Nova akan pakai bahasa Inggris.", Toast.LENGTH_LONG).show();
+                }
                 textToSpeech.setSpeechRate(1.1f);
-                textToSpeech.setPitch(1.2f);
+                textToSpeech.setPitch(1.1f);
             }
         });
     }
@@ -75,12 +82,6 @@ public class FloatingBubbleView implements BubbleViewModel.ViewCallback, EventBu
             String speechText = (String) event.payload;
             if (textToSpeech != null && speechText != null && !speechText.isEmpty()) {
                 textToSpeech.speak(speechText, TextToSpeech.QUEUE_FLUSH, null, null);
-                new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
-                    if(tvStatus != null) {
-                        tvStatus.setText("Ngomong...");
-                        tvStatus.setTextColor(Color.parseColor("#FFFF00"));
-                    }
-                });
             }
         }
     }
@@ -90,20 +91,20 @@ public class FloatingBubbleView implements BubbleViewModel.ViewCallback, EventBu
             speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context);
             speechRecognizer.setRecognitionListener(new RecognitionListener() {
                 @Override public void onReadyForSpeech(Bundle params) {
-                    tvStatus.setText("DENGARKAN...");
-                    bgAurora.setStroke(dpToPx(3), Color.RED);
-                    bubbleRootView.setBackground(bgAurora);
+                    tvStatus.setText("MENDENGAR...");
+                    bgAurora.setStroke(dpToPx(3), Color.parseColor("#FF0055"));
                 }
                 @Override public void onBeginningOfSpeech() {}
                 @Override public void onRmsChanged(float rmsdB) {}
                 @Override public void onBufferReceived(byte[] buffer) {}
                 @Override public void onEndOfSpeech() {
-                    tvStatus.setText("MIKIR...");
+                    tvStatus.setText("MEMIKIRKAN...");
                     bgAurora.setStroke(dpToPx(2), Color.parseColor("#E024FF"));
-                    bubbleRootView.setBackground(bgAurora);
+                    startBreathingEffect();
                 }
                 @Override public void onError(int error) {
-                    tvStatus.setText("GAK DENGER");
+                    tvStatus.setText("SUARA TAK JELAS");
+                    stopBreathingEffect();
                     isAgentRunning = false;
                 }
                 @Override public void onResults(Bundle results) {
@@ -130,34 +131,34 @@ public class FloatingBubbleView implements BubbleViewModel.ViewCallback, EventBu
         rootLayout.setOrientation(LinearLayout.VERTICAL);
         rootLayout.setGravity(Gravity.CENTER);
         
-        int bubbleSize = dpToPx(85);
+        int bubbleSize = dpToPx(90); // Sedikit lebih estetik
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(bubbleSize, bubbleSize);
         rootLayout.setLayoutParams(params);
 
         bgAurora = new GradientDrawable();
         bgAurora.setShape(GradientDrawable.OVAL);
-        bgAurora.setColor(Color.parseColor("#CC0B001A"));
-        bgAurora.setStroke(dpToPx(2), Color.parseColor("#E024FF"));
+        bgAurora.setColor(Color.parseColor("#E60B0F19")); // Hitam Transparan
+        bgAurora.setStroke(dpToPx(2), Color.parseColor("#00FFFF")); // Tepi Neon Cyan
         rootLayout.setBackground(bgAurora);
 
         TextView tvTitle = new TextView(context);
         tvTitle.setText("NOVA Ai");
-        tvTitle.setTextColor(Color.parseColor("#00FFFF"));
-        tvTitle.setTextSize(16f);
+        tvTitle.setTextColor(Color.parseColor("#FFFFFF"));
+        tvTitle.setTextSize(18f);
         tvTitle.setTypeface(null, Typeface.BOLD);
         tvTitle.setGravity(Gravity.CENTER);
-        tvTitle.setShadowLayer(10f, 0f, 0f, Color.parseColor("#00FFFF"));
+        tvTitle.setShadowLayer(15f, 0f, 0f, Color.parseColor("#00FFFF"));
         
         TextView tvAuthor = new TextView(context);
-        tvAuthor.setText("by Moch Khoirul Azman");
-        tvAuthor.setTextColor(Color.parseColor("#Aaaaaa"));
-        tvAuthor.setTextSize(6f);
+        tvAuthor.setText("by Azman");
+        tvAuthor.setTextColor(Color.parseColor("#888888"));
+        tvAuthor.setTextSize(8f);
         tvAuthor.setGravity(Gravity.CENTER);
 
         tvStatus = new TextView(context);
         tvStatus.setText("TAP & SPEAK");
-        tvStatus.setTextColor(Color.parseColor("#E024FF"));
-        tvStatus.setTextSize(8f);
+        tvStatus.setTextColor(Color.parseColor("#00FFFF"));
+        tvStatus.setTextSize(9f);
         tvStatus.setTypeface(null, Typeface.BOLD);
         tvStatus.setGravity(Gravity.CENTER);
         tvStatus.setPadding(0, dpToPx(4), 0, 0);
@@ -179,9 +180,9 @@ public class FloatingBubbleView implements BubbleViewModel.ViewCallback, EventBu
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
                 PixelFormat.TRANSLUCENT
         );
-        layoutParams.gravity = Gravity.TOP | Gravity.START;
-        layoutParams.x = dpToPx(16);
-        layoutParams.y = dpToPx(100);
+        layoutParams.gravity = Gravity.CENTER_VERTICAL | Gravity.END;
+        layoutParams.x = 0;
+        layoutParams.y = 0;
 
         bubbleRootView.setOnTouchListener(new View.OnTouchListener() {
             private int initialX, initialY;
@@ -200,7 +201,7 @@ public class FloatingBubbleView implements BubbleViewModel.ViewCallback, EventBu
                         float diffY = event.getRawY() - initialTouchY;
                         if (Math.abs(diffX) > 10 || Math.abs(diffY) > 10) {
                             isDragging = true;
-                            layoutParams.x = initialX + (int) diffX;
+                            layoutParams.x = initialX - (int) diffX; // Geser kebalik karena Gravity.END
                             layoutParams.y = initialY + (int) diffY;
                             windowManager.updateViewLayout(bubbleRootView, layoutParams);
                         }
@@ -218,6 +219,27 @@ public class FloatingBubbleView implements BubbleViewModel.ViewCallback, EventBu
 
         try { windowManager.addView(bubbleRootView, layoutParams); isAddedToWindow = true; } catch (Exception e) {}
     }
+    
+    private void startBreathingEffect() {
+        if (breathingAnimator == null) {
+            breathingAnimator = ValueAnimator.ofInt(50, 255);
+            breathingAnimator.setDuration(800);
+            breathingAnimator.setRepeatCount(ValueAnimator.INFINITE);
+            breathingAnimator.setRepeatMode(ValueAnimator.REVERSE);
+            breathingAnimator.addUpdateListener(animator -> {
+                int alpha = (int) animator.getAnimatedValue();
+                bgAurora.setStroke(dpToPx(2), Color.argb(alpha, 224, 36, 255)); // E024FF
+            });
+        }
+        breathingAnimator.start();
+    }
+
+    private void stopBreathingEffect() {
+        if (breathingAnimator != null) {
+            breathingAnimator.cancel();
+        }
+        bgAurora.setStroke(dpToPx(2), Color.parseColor("#00FFFF"));
+    }
 
     private void listenToVoice() {
         if (textToSpeech != null && textToSpeech.isSpeaking()) textToSpeech.stop(); 
@@ -228,7 +250,9 @@ public class FloatingBubbleView implements BubbleViewModel.ViewCallback, EventBu
             try {
                 speechRecognizer.startListening(intent);
                 isAgentRunning = true;
-            } catch (Exception e) { }
+            } catch (Exception e) { 
+                Toast.makeText(context, "Microphone Error", Toast.LENGTH_SHORT).show();
+            }
         }
     }
 
@@ -236,11 +260,14 @@ public class FloatingBubbleView implements BubbleViewModel.ViewCallback, EventBu
         try {
             AutonomousLoopEngine engine = ServiceLocator.getInstance().resolve(AutonomousLoopEngine.class);
             engine.startTask(task);
-        } catch (Exception e) {}
+        } catch (Exception e) {
+            onError("Sistem Belum Siap");
+        }
     }
 
     private void stopAgent() {
         isAgentRunning = false;
+        stopBreathingEffect();
         if (speechRecognizer != null) speechRecognizer.cancel();
         if (textToSpeech != null && textToSpeech.isSpeaking()) textToSpeech.stop();
         
@@ -250,15 +277,14 @@ public class FloatingBubbleView implements BubbleViewModel.ViewCallback, EventBu
         } catch (Exception e) {}
         
         tvStatus.setText("TAP & SPEAK");
-        tvStatus.setTextColor(Color.parseColor("#E024FF"));
-        bgAurora.setStroke(dpToPx(2), Color.parseColor("#E024FF"));
-        bubbleRootView.setBackground(bgAurora);
+        tvStatus.setTextColor(Color.parseColor("#00FFFF"));
     }
 
     public void remove() {
         EventBus.getInstance().unsubscribe(AgentEvent.EventType.VOICE_RECEIVED, this);
         if (textToSpeech != null) { textToSpeech.stop(); textToSpeech.shutdown(); }
         if (speechRecognizer != null) speechRecognizer.destroy();
+        stopBreathingEffect();
         if (isAddedToWindow && bubbleRootView != null) {
             try { windowManager.removeView(bubbleRootView); isAddedToWindow = false; } catch (Exception e) {}
         }
@@ -266,26 +292,33 @@ public class FloatingBubbleView implements BubbleViewModel.ViewCallback, EventBu
 
     @Override
     public void onStateChanged(String stateName) {
-        if (tvStatus != null && isAgentRunning) {
-            if(!tvStatus.getText().toString().equals("Ngomong...")) {
+        new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
+            if (tvStatus != null && isAgentRunning) {
                 tvStatus.setText(stateName);
+                if (stateName.equals("IDLE") || stateName.equals("TUGAS SELESAI")) {
+                    tvStatus.setTextColor(Color.parseColor("#00FF00"));
+                    isAgentRunning = false;
+                    stopBreathingEffect();
+                    bubbleRootView.postDelayed(this::stopAgent, 2500);
+                } else if (stateName.equals("ERROR")) {
+                    onError("API ERROR");
+                } else {
+                    tvStatus.setTextColor(Color.parseColor("#E024FF"));
+                }
             }
-            if (stateName.equals("TUGAS SELESAI")) {
-                tvStatus.setTextColor(Color.parseColor("#00FF00"));
-                isAgentRunning = false;
-                bubbleRootView.postDelayed(this::stopAgent, 3000);
-            } else {
-                tvStatus.setTextColor(Color.parseColor("#00FFFF"));
-            }
-        }
+        });
     }
 
     @Override
     public void onError(String errorMessage) {
-        if (tvStatus != null) {
-            tvStatus.setText("ERROR");
-            tvStatus.setTextColor(Color.RED);
-            bubbleRootView.postDelayed(this::stopAgent, 2000);
-        }
+        new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
+            if (tvStatus != null) {
+                tvStatus.setText("GAGAL: " + errorMessage.substring(0, Math.min(10, errorMessage.length())));
+                tvStatus.setTextColor(Color.parseColor("#FF0055"));
+                stopBreathingEffect();
+                bgAurora.setStroke(dpToPx(2), Color.parseColor("#FF0055"));
+                bubbleRootView.postDelayed(this::stopAgent, 3000);
+            }
+        });
     }
 }

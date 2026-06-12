@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#0B0F19"
+    android:padding="24dp"
+    android:gravity="center_horizontal">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="NOVA Ai"
+        android:textSize="36sp"
+        android:textStyle="bold"
+        android:textColor="#00FFFF"
+        android:shadowColor="#E024FF"
+        android:shadowDx="0"
+        android:shadowDy="0"
+        android:shadowRadius="15"
+        android:layout_marginTop="20dp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="System Control Center"
+        android:textSize="14sp"
+        android:textColor="#AAAAAA"
+        android:layout_marginBottom="40dp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="#1A1A2E"
+        android:padding="20dp"
+        android:elevation="10dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="GROQ API KEY"
+            android:textColor="#E024FF"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="8dp"/>
+
+        <EditText
+            android:id="@+id/etApiKey"
+            android:layout_width="match_parent"
+            android:layout_height="50dp"
+            android:background="#000000"
+            android:hint="Paste gsk_xxx disini..."
+            android:textColorHint="#555555"
+            android:textColor="#FFFFFF"
+            android:padding="12dp"
+            android:inputType="textPassword"
+            android:layout_marginBottom="16dp"/>
+
+        <Button
+            android:id="@+id/btnSave"
+            android:layout_width="match_parent"
+            android:layout_height="55dp"
+            android:text="SIMPAN API KEY"
+            android:textColor="#0B0F19"
+            android:textStyle="bold"
+            android:backgroundTint="#00FFFF"
+            android:layout_marginBottom="24dp"/>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="SYSTEM PERMISSIONS"
+            android:textColor="#E024FF"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="8dp"/>
+
+        <Button
+            android:id="@+id/btnBattery"
+            android:layout_width="match_parent"
+            android:layout_height="55dp"
+            android:text="1. BEBASKAN BATERAI (ANTI-KILL)"
+            android:textColor="#FFFFFF"
+            android:backgroundTint="#E024FF"
+            android:layout_marginBottom="12dp"/>
+
+        <Button
+            android:id="@+id/btnPermissions"
+            android:layout_width="match_parent"
+            android:layout_height="55dp"
+            android:text="2. BERIKAN IZIN &amp; JALANKAN"
+            android:textColor="#FFFFFF"
+            android:backgroundTint="#333333" />
+    </LinearLayout>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Jika aksesibilitas abu-abu/dikunci OS, buka Pengaturan HP > Aplikasi > Nova Agent > Klik titik 3 di kanan atas > Izinkan Pengaturan Terbatas."
+        android:textSize="10sp"
+        android:textColor="#FF5555"
+        android:textAlignment="center"
+        android:layout_marginTop="30dp" />
+
+</LinearLayout>
