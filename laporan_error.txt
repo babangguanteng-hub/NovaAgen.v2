@@ -9,24 +9,25 @@
 > Task :app:generateDebugAssets UP-TO-DATE
 > Task :app:mergeDebugAssets
 > Task :app:compressDebugAssets
-> Task :app:processDebugManifestForPackage
 > Task :app:processDebugJavaRes NO-SOURCE
-> Task :app:processDebugResources
+> Task :app:processDebugManifestForPackage
 > Task :app:mergeDebugJavaResource
+> Task :app:desugarDebugFileDependencies
+> Task :app:mergeDebugJniLibFolders
+> Task :app:checkDebugDuplicateClasses
+> Task :app:mergeDebugNativeLibs NO-SOURCE
+> Task :app:processDebugResources
+> Task :app:mergeExtDexDebug
 
 > Task :app:compileDebugJavaWithJavac
-/home/runner/work/NovaAgen.v2/NovaAgen.v2/app/src/main/java/com/novaagent/app/infrastructure/injector/SystemActionInjector.java:48: error: cannot find symbol
-                success = service.typeTextInFocusedNode(cmd.textToType);
-                                                           ^
-  symbol:   variable textToType
-  location: variable cmd of type ActionCommandDto
-/home/runner/work/NovaAgen.v2/NovaAgen.v2/app/src/main/java/com/novaagent/app/infrastructure/injector/SystemActionInjector.java:53: error: cannot find symbol
-                if ("quick_settings".equals(cmd.globalAction)) success = service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_QUICK_SETTINGS);
-                                               ^
-  symbol:   variable globalAction
-  location: variable cmd of type ActionCommandDto
-/home/runner/work/NovaAgen.v2/NovaAgen.v2/app/src/main/java/com/novaagent/app/infrastructure/injector/SystemActionInjector.java:54: error: cannot find symbol
-                else if ("home".equals(cmd.globalAction)) success = service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME);
-                                          ^
-  symbol:   variable globalAction
-  location: variable cmd of type ActionCommandDto
+/home/runner/work/NovaAgen.v2/NovaAgen.v2/app/src/main/java/com/novaagent/app/core/engine/AutonomousLoopEngine.java:107: error: cannot find symbol
+                service.requestScreenScan();
+                       ^
+  symbol:   method requestScreenScan()
+  location: variable service of type NovaAccessibilityService
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+1 error
+
+> Task :app:compileDebugJavaWithJavac FAILED
+
