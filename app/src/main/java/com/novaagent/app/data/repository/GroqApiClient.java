@@ -16,6 +16,7 @@ import okhttp3.Response;
 
 public class GroqApiClient {
     private static final String API_URL = "https://api.groq.com/openai/v1/chat/completions";
+    // KEMBALI KE MODEL PALING STABIL
     private static final String MODEL_NAME = "llama3-70b-8192"; 
     
     private final OkHttpClient client;
@@ -49,9 +50,7 @@ public class GroqApiClient {
             payload.put("model", MODEL_NAME);
             payload.put("temperature", 0.5); 
             
-            JSONObject responseFormat = new JSONObject();
-            responseFormat.put("type", "json_object");
-            payload.put("response_format", responseFormat);
+            // SENGAJA KITA HAPUS "response_format: json_object" KARENA SERING BIKIN ERROR 400 DI GROQ FREE
 
             JSONArray messages = new JSONArray();
             
@@ -69,7 +68,7 @@ public class GroqApiClient {
 
             RequestBody body = RequestBody.create(payload.toString(), MediaType.parse("application/json; charset=utf-8"));
             
-            // [TOPENG PENYAMARAN]: Kita tambahkan Header palsu agar dikira manusia/browser resmi
+            // TOPENG PENYAMARAN AGAR DIKIRA MANUSIA (ANTI-BOT)
             Request request = new Request.Builder()
                     .url(API_URL)
                     .addHeader("Authorization", "Bearer " + apiKey)

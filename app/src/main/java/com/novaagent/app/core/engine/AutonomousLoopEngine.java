@@ -63,9 +63,12 @@ public class AutonomousLoopEngine implements EventBus.EventListener {
             if (event.type == AgentEvent.EventType.SCREEN_UPDATED) {
                 String screenContext = String.valueOf(event.payload);
                 
-                // [ANTI HTTP 400]: Mencegah teks kepanjangan yang memicu error payload di Groq
-                if (screenContext.length() > 4000) {
-                    screenContext = screenContext.substring(0, 4000) + "\n...[Teks Layar Terpotong]";
+                // [PEMBERSIH TEKS LAYAR]: Membuang karakter aneh yang bikin Groq error 400
+                screenContext = screenContext.replaceAll("[^a-zA-Z0-9 \\n()\\[\\]\"',.:/_-]", "");
+                
+                // [PEMBATAS MEMORI]: Maksimal 2000 karakter agar JSON aman dan API tidak menolak
+                if (screenContext.length() > 2000) {
+                    screenContext = screenContext.substring(0, 2000) + "\n...[Dipotong]";
                 }
                 
                 processWithAI(screenContext);
@@ -100,7 +103,7 @@ public class AutonomousLoopEngine implements EventBus.EventListener {
                         actionInjector.executeAction(cmd);
                     }
                 } catch (Exception e) {
-                    EventBus.getInstance().publish(new AgentEvent(AgentEvent.EventType.ERROR, "Format Groq Salah"));
+                    EventBus.getInstance().publish(new AgentEvent(AgentEvent.EventType.ERROR, "Format AI Salah"));
                     stopTask();
                 }
             }
