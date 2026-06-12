@@ -2,18 +2,22 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- SEMUA IZIN SISTEM DIPERTAHANKAN (100% FITUR AMAN) -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    
-    <!-- Khusus Android 13/14 untuk Voice Command & Screen Capture -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- WAJIB UNTUK ANDROID 11+ AGAR BISA MEMANGGIL MESIN TTS GOOGLE -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
+    </queries>
 
     <application
         android:allowBackup="false"
@@ -23,7 +27,6 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.AppCompat.Light.NoActionBar">
 
-        <!-- ACTIVITY UTAMA (UI Neon & Input API Key) -->
         <activity
             android:name=".ui.config.MainActivity"
             android:exported="true"
@@ -34,13 +37,11 @@
             </intent-filter>
         </activity>
 
-        <!-- FOREGROUND SERVICE (Anti-Kill System) -->
         <service
             android:name=".services.foreground.NovaForegroundService"
             android:exported="false"
             android:foregroundServiceType="mediaProjection|microphone" />
 
-        <!-- ACCESSIBILITY SERVICE (Mata & Tangan Nova AI) -->
         <service
             android:name=".services.accessibility.NovaAccessibilityService"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
