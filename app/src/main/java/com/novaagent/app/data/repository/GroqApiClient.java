@@ -4,7 +4,6 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.util.Log;
 import org.json.JSONArray;
-import org.json.JSONException;
 import org.json.JSONObject;
 import java.io.IOException;
 import java.util.concurrent.TimeUnit;
@@ -19,7 +18,6 @@ import okhttp3.Response;
 public class GroqApiClient {
     private static final String TAG = "GroqApiClient";
     private static final String API_URL = "https://api.groq.com/openai/v1/chat/completions";
-    // UPGRADE KE LLAMA 3.1
     private static final String MODEL_NAME = "llama-3.1-70b-versatile"; 
     
     private final OkHttpClient client;
@@ -33,18 +31,19 @@ public class GroqApiClient {
     public GroqApiClient(Context context) {
         this.context = context;
         client = new OkHttpClient.Builder()
-                .connectTimeout(15, TimeUnit.SECONDS)
-                .readTimeout(30, TimeUnit.SECONDS)
-                .writeTimeout(15, TimeUnit.SECONDS)
+                .connectTimeout(20, TimeUnit.SECONDS)
+                .readTimeout(40, TimeUnit.SECONDS)
+                .writeTimeout(20, TimeUnit.SECONDS)
                 .build();
     }
 
     public void sendPrompt(String systemPrompt, String userPrompt, GroqCallback callback) {
         SharedPreferences prefs = context.getSharedPreferences("nova_config", Context.MODE_PRIVATE);
-        String apiKey = prefs.getString("groq_api_key", "");
+        // Hapus spasi gaib di awal/akhir kunci menggunakan .trim()
+        String apiKey = prefs.getString("groq_api_key", "").trim();
 
         if (apiKey.isEmpty()) {
-            callback.onError("API Key kosong di sistem!");
+            callback.onError("API Key kosong!");
             return;
         }
 
@@ -79,12 +78,13 @@ public class GroqApiClient {
             client.newCall(request).enqueue(new Callback() {
                 @Override
                 public void onFailure(Call call, IOException e) {
-                    callback.onError("Koneksi internet gagal nih boss!");
+                    callback.onError("Koneksi Internet Terputus!");
                 }
                 @Override
                 public void onResponse(Call call, Response response) throws IOException {
                     if (!response.isSuccessful()) {
-                        callback.onError("API Error: Pastikan API Key valid.");
+                        // KITA TAMPILKAN KODE ERROR ASLI DARI SERVER (Misal: HTTP 401 atau 429)
+                        callback.onError("HTTP " + response.code());
                         return;
                     }
                     try {
@@ -96,12 +96,12 @@ public class GroqApiClient {
                                 .getString("content");
                         callback.onSuccess(content);
                     } catch (Exception e) {
-                        callback.onError("Gagal memahami respon Groq.");
+                        callback.onError("Gagal baca JSON");
                     }
                 }
             });
         } catch (Exception e) {
-            callback.onError("Error Sistem Internal.");
+            callback.onError("Internal Sistem");
         }
     }
 }
