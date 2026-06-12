@@ -18,21 +18,14 @@ public class NovaAccessibilityService extends AccessibilityService {
     @Override
     protected void onServiceConnected() {
         super.onServiceConnected();
-        try {
-            ServiceLocator.getInstance().register(NovaAccessibilityService.class, this);
-            Log.d(TAG, "Layanan Aksesibilitas Terhubung dan Aman.");
-        } catch (Exception e) {}
+        try { ServiceLocator.getInstance().register(NovaAccessibilityService.class, this); } catch (Exception e) {}
     }
 
     @Override
-    public void onAccessibilityEvent(AccessibilityEvent event) {
-        // Biarkan kosong agar RAM tidak cepat panas.
-        // Kita hanya memindai layar saat Nova dipanggil saja.
-    }
+    public void onAccessibilityEvent(AccessibilityEvent event) {}
 
     private void parseNodeTree(AccessibilityNodeInfo node, StringBuilder sb) {
         if (node == null) return;
-        
         try {
             if (node.isVisibleToUser()) {
                 CharSequence text = node.getText();
@@ -43,32 +36,28 @@ public class NovaAccessibilityService extends AccessibilityService {
                     Rect bounds = new Rect();
                     node.getBoundsInScreen(bounds);
                     String type = node.isEditable() ? "Input" : (node.isClickable() ? "Button" : "Text");
-                    sb.append("[").append(type).append("] ")
-                      .append("\"").append(nodeText).append("\" ")
-                      .append("center(").append(bounds.centerX()).append(",").append(bounds.centerY()).append(")\n");
+                    sb.append("[").append(type).append("] \"").append(nodeText).append("\" center(")
+                      .append(bounds.centerX()).append(",").append(bounds.centerY()).append(")\n");
                 }
             }
             
-            // [ANTI MATI SENDIRI]: Mengekstrak anak-anak node dan LANGSUNG MENGHAPUSNYA DARI RAM!
             for (int i = 0; i < node.getChildCount(); i++) {
-                AccessibilityNodeInfo child = node.getChild(i);
-                if (child != null) {
-                    parseNodeTree(child, sb);
-                    child.recycle(); // <--- INI ADALAH OBAT ANTI-MATI NYA!
-                }
+                parseNodeTree(node.getChild(i), sb);
             }
         } catch (Exception e) {}
     }
 
     public String getCurrentScreenContext() {
-        AccessibilityNodeInfo rootNode = getRootInActiveWindow();
-        if (rootNode != null) {
-            StringBuilder sb = new StringBuilder();
-            parseNodeTree(rootNode, sb);
-            lastScreenContext = sb.toString();
-            rootNode.recycle(); // Hapus root node dari RAM
-        }
-        return lastScreenContext.isEmpty() ? "Tidak ada elemen yang bisa diklik." : lastScreenContext;
+        try {
+            AccessibilityNodeInfo rootNode = getRootInActiveWindow();
+            if (rootNode != null) {
+                StringBuilder sb = new StringBuilder();
+                parseNodeTree(rootNode, sb);
+                lastScreenContext = sb.toString();
+                rootNode.recycle(); 
+            }
+        } catch (Exception e) {}
+        return lastScreenContext.isEmpty() ? "Tidak ada elemen di layar." : lastScreenContext;
     }
 
     public void requestScreenScan() {
@@ -76,21 +65,37 @@ public class NovaAccessibilityService extends AccessibilityService {
         EventBus.getInstance().publish(new AgentEvent(AgentEvent.EventType.SCREEN_UPDATED, screenData));
     }
 
-    public boolean typeTextInFocusedNode(String text) {
+    // =========================================================
+    // INI DIA FUNGSI YANG HILANG DAN BIKIN ERROR
+    // =========================================================
+    public boolean typeTextAtCoordinate(int x, int y, String text) {
         if (text == null) text = "";
-        AccessibilityNodeInfo rootNode = getRootInActiveWindow();
-        if (rootNode == null) return false;
-        
-        AccessibilityNodeInfo focusedNode = rootNode.findFocus(AccessibilityNodeInfo.FOCUS_INPUT);
-        if (focusedNode != null && focusedNode.isEditable()) {
-            Bundle arguments = new Bundle();
-            arguments.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text);
-            boolean res = focusedNode.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, arguments);
-            focusedNode.recycle();
+        try {
+            AccessibilityNodeInfo rootNode = getRootInActiveWindow();
+            if (rootNode == null) return false;
+            
+            boolean result = findAndSetTextByCoordinate(rootNode, x, y, text);
             rootNode.recycle();
-            return res;
+            return result;
+        } catch (Exception e) {
+            return false;
         }
-        rootNode.recycle();
+    }
+
+    private boolean findAndSetTextByCoordinate(AccessibilityNodeInfo node, int x, int y, String text) {
+        if (node == null) return false;
+        Rect bounds = new Rect();
+        node.getBoundsInScreen(bounds);
+        
+        if (bounds.contains(x, y) && (node.isEditable() || node.getClassName().toString().contains("EditText"))) {
+            Bundle args = new Bundle();
+            args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text);
+            return node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args);
+        }
+        
+        for (int i = 0; i < node.getChildCount(); i++) {
+            if (findAndSetTextByCoordinate(node.getChild(i), x, y, text)) return true;
+        }
         return false;
     }
 
