@@ -16,7 +16,11 @@ import okhttp3.Response;
 
 public class GroqApiClient {
     private static final String API_URL = "https://api.groq.com/openai/v1/chat/completions";
-    private static final String MODEL_NAME = "llama3-70b-8192"; 
+    
+    // ========================================================
+    // 🔥 INI DIA KUNCINYA: KITA PAKAI MODEL TERBARU YANG AKTIF
+    // ========================================================
+    private static final String MODEL_NAME = "llama-3.1-8b-instant"; 
     
     private final OkHttpClient client;
     private final Context context;
@@ -49,10 +53,7 @@ public class GroqApiClient {
             payload.put("model", MODEL_NAME);
             payload.put("temperature", 0.5); 
             
-            // ========================================================
-            // ☢️ NUCLEAR OPTION: KITA HAPUS PAKSAAN "response_format"
-            // Groq tidak akan lagi melakukan validasi JSON kaku yang bikin error!
-            // ========================================================
+            // Kita tetap biarkan mode bebas (tanpa response_format) agar tidak kena HTTP 400
 
             JSONArray messages = new JSONArray();
             JSONObject systemMsg = new JSONObject();
@@ -68,6 +69,8 @@ public class GroqApiClient {
             payload.put("messages", messages);
 
             RequestBody body = RequestBody.create(payload.toString(), MediaType.parse("application/json; charset=utf-8"));
+            
+            // Topeng Penyamaran Samsung tetap kita pasang agar kebal blokir
             Request request = new Request.Builder()
                     .url(API_URL)
                     .addHeader("Authorization", "Bearer " + apiKey)
