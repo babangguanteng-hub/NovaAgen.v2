@@ -13,19 +13,34 @@
         android:id="@+id/tvStatus"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="NOVA: IDLE"
+        android:text="NOVA: SIAP"
         android:textColor="#00E5FF"
         android:textStyle="bold"
-        android:textSize="14sp"
+        android:textSize="12sp"
         android:layout_marginBottom="12dp"/>
 
-    <Button
-        android:id="@+id/btnAction"
+    <LinearLayout
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="JALANKAN"
-        android:backgroundTint="#00E5FF"
-        android:textColor="#000000"
-        android:textStyle="bold" />
+        android:orientation="horizontal"
+        android:gravity="center">
+
+        <Button
+            android:id="@+id/btnMic"
+            android:layout_width="60dp"
+            android:layout_height="50dp"
+            android:text="🎤"
+            android:textSize="18sp"
+            android:backgroundTint="#4CAF50"
+            android:layout_marginEnd="8dp"/>
+
+        <Button
+            android:id="@+id/btnStop"
+            android:layout_width="60dp"
+            android:layout_height="50dp"
+            android:text="⏹️"
+            android:textSize="18sp"
+            android:backgroundTint="#F44336" />
+    </LinearLayout>
 
 </LinearLayout>

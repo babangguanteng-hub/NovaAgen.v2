@@ -1,8 +1,13 @@
 package com.novaagent.app.ui.bubble;
 
 import android.content.Context;
+import android.content.Intent;
 import android.graphics.PixelFormat;
 import android.os.Build;
+import android.os.Bundle;
+import android.speech.RecognitionListener;
+import android.speech.RecognizerIntent;
+import android.speech.SpeechRecognizer;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
@@ -10,7 +15,6 @@ import android.view.View;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import com.novaagent.app.R;
 import com.novaagent.app.core.bus.AgentEvent;
@@ -18,13 +22,18 @@ import com.novaagent.app.core.bus.EventBus;
 import com.novaagent.app.core.di.ServiceLocator;
 import com.novaagent.app.core.engine.AutonomousLoopEngine;
 
+import java.util.ArrayList;
+
 public class FloatingBubbleView implements EventBus.EventListener {
     private final Context context;
     private final WindowManager windowManager;
     private View bubbleView;
     private TextView tvStatus;
-    private Button btnAction;
     private boolean isAdded = false;
+
+    // Mesin Perekam Suara
+    private SpeechRecognizer speechRecognizer;
+    private Intent speechIntent;
 
     public FloatingBubbleView(Context context) {
         this.context = context;
@@ -32,26 +41,65 @@ public class FloatingBubbleView implements EventBus.EventListener {
         EventBus.getInstance().subscribe(AgentEvent.EventType.STATE_CHANGED, this);
         EventBus.getInstance().subscribe(AgentEvent.EventType.ERROR, this);
         initView();
+        setupSpeechRecognizer();
+    }
+
+    private void setupSpeechRecognizer() {
+        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context);
+        speechIntent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+        speechIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+        speechIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "id-ID"); // Bahasa Indonesia
+
+        speechRecognizer.setRecognitionListener(new RecognitionListener() {
+            @Override public void onReadyForSpeech(Bundle params) { tvStatus.setText("MENDENGARKAN..."); }
+            @Override public void onBeginningOfSpeech() {}
+            @Override public void onRmsChanged(float rmsdB) {}
+            @Override public void onBufferReceived(byte[] buffer) {}
+            @Override public void onEndOfSpeech() { tvStatus.setText("MEMPROSES..."); }
+            @Override public void onError(int error) { tvStatus.setText("SUARA GAGAL (" + error + ")"); }
+            
+            @Override public void onResults(Bundle results) {
+                ArrayList<String> matches = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+                if (matches != null && !matches.isEmpty()) {
+                    String command = matches.get(0);
+                    tvStatus.setText("PERINTAH: " + command);
+                    try {
+                        // MENGIRIM PERINTAH SUARA KE OTAK AI
+                        AutonomousLoopEngine engine = ServiceLocator.getInstance().resolve(AutonomousLoopEngine.class);
+                        engine.startTask(command);
+                    } catch (Exception e) {
+                        tvStatus.setText("ERROR: OTAK MATI");
+                    }
+                }
+            }
+            @Override public void onPartialResults(Bundle partialResults) {}
+            @Override public void onEvent(int eventType, Bundle params) {}
+        });
     }
 
     private void initView() {
-        // Menggunakan XML untuk rendering UI yang sempurna
         bubbleView = LayoutInflater.from(context).inflate(R.layout.layout_floating_bubble, null);
         tvStatus = bubbleView.findViewById(R.id.tvStatus);
-        btnAction = bubbleView.findViewById(R.id.btnAction);
+        Button btnMic = bubbleView.findViewById(R.id.btnMic);
+        Button btnStop = bubbleView.findViewById(R.id.btnStop);
 
-        // LOGIKA KLIK: Terpisah murni hanya untuk tombol
-        btnAction.setOnClickListener(v -> {
-            try {
-                AutonomousLoopEngine engine = ServiceLocator.getInstance().resolve(AutonomousLoopEngine.class);
-                engine.startTask("Jelajahi layar ini dan cari informasi penting");
-            } catch (Exception e) {
-                tvStatus.setText("ERROR: MESIN AI BELUM SIAP");
-                Toast.makeText(context, "Nova masih melakukan pemanasan...", Toast.LENGTH_SHORT).show();
+        // TOMBOL MIC: Mulai mendengarkan perintah
+        btnMic.setOnClickListener(v -> {
+            if (speechRecognizer != null) {
+                speechRecognizer.startListening(speechIntent);
             }
         });
 
-        // LOGIKA GESER (DRAG): Hanya dipicu jika menekan area background, bukan tombol
+        // TOMBOL STOP: Rem darurat mematikan Loop Engine
+        btnStop.setOnClickListener(v -> {
+            try {
+                AutonomousLoopEngine engine = ServiceLocator.getInstance().resolve(AutonomousLoopEngine.class);
+                engine.stopTask(); // Memutus siklus kesurupan
+                tvStatus.setText("NOVA: DIHENTIKAN");
+            } catch (Exception e) {}
+        });
+
+        // Logika Geser (Drag)
         bubbleView.setOnTouchListener(new View.OnTouchListener() {
             private int initialX, initialY;
             private float initialTouchX, initialTouchY;
@@ -60,15 +108,11 @@ public class FloatingBubbleView implements EventBus.EventListener {
             @Override
             public boolean onTouch(View v, MotionEvent event) {
                 if (params == null) params = (WindowManager.LayoutParams) bubbleView.getLayoutParams();
-                
                 switch (event.getAction()) {
                     case MotionEvent.ACTION_DOWN:
-                        initialX = params.x;
-                        initialY = params.y;
-                        initialTouchX = event.getRawX();
-                        initialTouchY = event.getRawY();
+                        initialX = params.x; initialY = params.y;
+                        initialTouchX = event.getRawX(); initialTouchY = event.getRawY();
                         return true;
-                        
                     case MotionEvent.ACTION_MOVE:
                         params.x = initialX + (int) (event.getRawX() - initialTouchX);
                         params.y = initialY + (int) (event.getRawY() - initialTouchY);
@@ -104,6 +148,9 @@ public class FloatingBubbleView implements EventBus.EventListener {
             try { windowManager.removeView(bubbleView); } catch (Exception e) {}
             isAdded = false;
         }
+        if (speechRecognizer != null) {
+            speechRecognizer.destroy();
+        }
         EventBus.getInstance().unsubscribe(AgentEvent.EventType.STATE_CHANGED, this);
         EventBus.getInstance().unsubscribe(AgentEvent.EventType.ERROR, this);
     }
@@ -112,7 +159,8 @@ public class FloatingBubbleView implements EventBus.EventListener {
     public void onEvent(AgentEvent event) {
         if (event.type == AgentEvent.EventType.STATE_CHANGED || event.type == AgentEvent.EventType.ERROR) {
             if (tvStatus != null) {
-                tvStatus.setText(String.valueOf(event.payload));
+                // Update UI di Main Thread
+                tvStatus.post(() -> tvStatus.setText(String.valueOf(event.payload)));
             }
         }
     }
