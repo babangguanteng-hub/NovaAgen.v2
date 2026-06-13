@@ -2,23 +2,18 @@ package com.novaagent.app.infrastructure.ocr;
 
 import android.graphics.Bitmap;
 import android.util.Log;
-
 import com.google.mlkit.vision.common.InputImage;
 import com.google.mlkit.vision.text.TextRecognition;
 import com.google.mlkit.vision.text.TextRecognizer;
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
 import com.novaagent.app.core.bus.AgentEvent;
 import com.novaagent.app.core.bus.EventBus;
-
-import org.json.JSONArray;
-import org.json.JSONObject;
-
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * Memproses gambar Bitmap menjadi teks menggunakan Google ML Kit On-Device.
- * Sangat dioptimalkan agar tidak menahan referensi Bitmap di memori.
+ * Mesin Ekstraksi Teks (OCR).
+ * Mengeksekusi konversi RGB_565 sebelum dikirim ke library ML Kit Google.
  */
 public class MlKitOcrEngine {
     private static final String TAG = "MlKitOcrEngine";
@@ -26,61 +21,42 @@ public class MlKitOcrEngine {
     private final ExecutorService ocrThread;
 
     public MlKitOcrEngine() {
-        // Menggunakan recognizer versi Latin (ringan, tanpa perlu download model dari cloud)
         recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
+        // Single Thread murni agar OCR tidak pernah memonopoli CPU Cores di Android Go
         ocrThread = Executors.newSingleThreadExecutor();
-        Log.d(TAG, "MlKitOcrEngine siap.");
     }
 
-    /**
-     * Bitmap WAJIB dalam format RGB_565 agar ukuran RAM-nya setengah dari ARGB_8888.
-     */
-    public void processImage(Bitmap bitmap) {
-        if (bitmap == null || bitmap.isRecycled()) {
-            Log.e(TAG, "Bitmap null atau sudah di-recycle. OCR dibatalkan.");
-            return;
-        }
+    public void processImage(Bitmap incomingBitmap) {
+        if (incomingBitmap == null || incomingBitmap.isRecycled()) return;
 
         ocrThread.execute(() -> {
+            Bitmap optimizedBitmap = null;
             try {
-                InputImage image = InputImage.fromBitmap(bitmap, 0);
+                // MUTLAK: Buang Alpha Channel (Transparansi). 
+                // Mengubah ARGB_8888 (4 bytes/pixel) -> RGB_565 (2 bytes/pixel). RAM terpotong 50%.
+                optimizedBitmap = incomingBitmap.copy(Bitmap.Config.RGB_565, false);
+                
+                InputImage image = InputImage.fromBitmap(optimizedBitmap, 0);
                 
                 recognizer.process(image)
                         .addOnSuccessListener(visionText -> {
-                            JSONArray ocrArray = new JSONArray();
-                            for (com.google.mlkit.vision.text.Text.TextBlock block : visionText.getTextBlocks()) {
-                                for (com.google.mlkit.vision.text.Text.Line line : block.getLines()) {
-                                    try {
-                                        JSONObject obj = new JSONObject();
-                                        obj.put("text", line.getText());
-                                        obj.put("source", "ocr");
-                                        if (line.getBoundingBox() != null) {
-                                            android.graphics.Rect rect = line.getBoundingBox();
-                                            obj.put("cx", rect.centerX());
-                                            obj.put("cy", rect.centerY());
-                                            obj.put("bounds", rect.left + "," + rect.top + "," + rect.right + "," + rect.bottom);
-                                        }
-                                        ocrArray.put(obj);
-                                    } catch (Exception e) {
-                                        Log.e(TAG, "Error parsing baris OCR JSON", e);
-                                    }
-                                }
-                            }
-                            Log.d(TAG, "OCR Selesai. Ditemukan " + ocrArray.length() + " elemen teks.");
-                            // Kirim hasil OCR ke EventBus
-                            EventBus.getInstance().publish(new AgentEvent(AgentEvent.EventType.OCR_COMPLETED, ocrArray));
+                            String extractedText = visionText.getText();
+                            // Publish hasilnya ke HEAVY_IO_LANE di EventBus
+                            EventBus.getInstance().publish(new AgentEvent(AgentEvent.EventType.OCR_COMPLETED, extractedText));
                         })
                         .addOnFailureListener(e -> {
-                            Log.e(TAG, "Gagal memproses OCR", e);
-                            EventBus.getInstance().publish(new AgentEvent(AgentEvent.EventType.RECOVERY_TRIGGERED, "OCR_TIMEOUT"));
+                            Log.e(TAG, "Gagal ekstraksi ML Kit.", e);
                         });
 
             } catch (Exception e) {
-                Log.e(TAG, "Exception fatal di background thread OCR", e);
+                Log.e(TAG, "OOM Exception saat konversi RGB_565", e);
             } finally {
-                // SANGAT PENTING: Selalu buang bitmap dari memori setelah jadi InputImage
-                if (!bitmap.isRecycled()) {
-                    bitmap.recycle();
+                // Aturan Ketat Pembersihan Memori C++ Layer Bitmap
+                if (optimizedBitmap != null && !optimizedBitmap.isRecycled()) {
+                    optimizedBitmap.recycle();
+                }
+                if (incomingBitmap != null && !incomingBitmap.isRecycled()) {
+                    incomingBitmap.recycle(); // Menghancurkan bitmap asli dari MediaProjection
                 }
             }
         });

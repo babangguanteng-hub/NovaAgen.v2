@@ -1,0 +1,62 @@
+name: NovaAgent CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  android_pipeline:
+    name: Lint, Test, Build & Release
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Mengambil kode sumber dari repository
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # 2. Setup Java 17 (Standar untuk Gradle 8+)
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle # Otomatis caching dependensi Gradle agar build lebih cepat
+
+      # 3. Memberikan izin eksekusi pada Gradle Wrapper
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      # 4. LINT: Pengecekan kode statis, error arsitektur, dan memory leaks potensial
+      - name: Run Android Lint
+        run: ./gradlew lintDebug
+
+      # 5. UNIT TEST: Menguji logika bisnis murni (ActionVerificationScore, dll)
+      - name: Run Unit Tests
+        run: ./gradlew testDebugUnitTest
+
+      # 6. BUILD: Kompilasi APK mode Debug
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug
+
+      # 7. ARTIFACT: Mengunggah APK Debug agar bisa di-download dari dashboard GitHub
+      - name: Upload Debug APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NovaAgent-Debug-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 7
+
+      # 8. RELEASE BUILD: Kompilasi APK mode Release (Optimized & Minified)
+      - name: Build Release APK
+        run: ./gradlew assembleRelease
+
+      # 9. ARTIFACT: Mengunggah APK Release
+      - name: Upload Release APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NovaAgent-Release-APK
+          # Catatan: Karena belum di-sign dengan Keystore, outputnya berakhiran -unsigned.apk
+          path: app/build/outputs/apk/release/app-release-unsigned.apk
+          retention-days: 30

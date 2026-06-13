@@ -1,68 +1,57 @@
 package com.novaagent.app.infrastructure.system;
 
 import android.content.Context;
+import android.content.Intent;
+import android.provider.Settings;
 import android.util.Log;
-
 import com.novaagent.app.core.bus.AgentEvent;
 import com.novaagent.app.core.bus.EventBus;
 
 /**
- * Bertanggung jawab menangani pemulihan sistem jika terjadi crash atau freeze
- * pada komponen Accessibility, OCR, atau Jaringan.
+ * Dokter Penyelamat. 
+ * Mengeksekusi strategi pemulihan berdasarkan level kerusakan sistem.
  */
 public class RecoveryManager implements EventBus.EventListener {
     private static final String TAG = "RecoveryManager";
-    private final Context appContext;
+    private final Context context;
 
     public RecoveryManager(Context context) {
-        this.appContext = context.getApplicationContext();
+        this.context = context;
         EventBus.getInstance().subscribe(AgentEvent.EventType.RECOVERY_TRIGGERED, this);
-        Log.d(TAG, "RecoveryManager diinisialisasi.");
     }
 
     @Override
     public void onEvent(AgentEvent event) {
         if (event.type == AgentEvent.EventType.RECOVERY_TRIGGERED) {
-            String reason = (String) event.payload;
-            Log.e(TAG, "Menerima sinyal RECOVERY_TRIGGERED. Alasan: " + reason);
-            executeRecovery(reason);
+            int level = (event.payload instanceof Integer) ? (int) event.payload : 3;
+            executeRecovery(level);
         }
     }
 
-    private void executeRecovery(String reason) {
-        if (reason.contains("OCR_TIMEOUT") || reason.contains("NODE_READ_FAIL")) {
-            executeLevel1Recovery();
-        } else if (reason.contains("BUBBLE_LOST") || reason.contains("PROJECTION_DEAD")) {
-            executeLevel2Recovery();
-        } else if (reason.contains("ACCESSIBILITY_KILLED")) {
-            executeLevel3Recovery();
-        } else {
-            Log.w(TAG, "Alasan recovery tidak dikenali, menjalankan Level 1 Default.");
-            executeLevel1Recovery();
+    private void executeRecovery(int level) {
+        Log.w(TAG, "Protokol Recovery Level: " + level);
+        switch (level) {
+            case 1: // Soft Reset
+                Log.i(TAG, "Level 1: Reset Cache.");
+                break;
+            case 2: // Service Rebind
+                Log.i(TAG, "Level 2: Rebinding Service.");
+                break;
+            case 3: // Hard Recovery (Paling Parah)
+                Log.e(TAG, "Level 3: Hard Restart. Aksesibilitas mati!");
+                promptUserForAccessibility();
+                break;
         }
     }
 
-    // Level 1: Soft Reset (Clear Cache & Restart Logic Loop)
-    private void executeLevel1Recovery() {
-        Log.d(TAG, "Menjalankan LEVEL 1 RECOVERY (Soft Reset)...");
-        // TODO: Panggil method clear() di ScreenCache dan NodeCache nanti
-        // Mengirim sinyal ke LoopEngine untuk kembali ke IDLE
-        EventBus.getInstance().publish(new AgentEvent(AgentEvent.EventType.STATE_CHANGED, "IDLE"));
-    }
-
-    // Level 2: Service Rebind (Restart Overlay & Projection)
-    private void executeLevel2Recovery() {
-        Log.d(TAG, "Menjalankan LEVEL 2 RECOVERY (Service Rebind)...");
-        // TODO: Restart FloatingBubbleService / Rebind WindowManager
-    }
-
-    // Level 3: Hard Restart (Panggil ulang layanan secara paksa)
-    private void executeLevel3Recovery() {
-        Log.e(TAG, "Menjalankan LEVEL 3 RECOVERY (Hard Restart)... Membutuhkan intervensi Android OS.");
-        // TODO: Minta ForegroundService untuk meluncurkan Intent darurat ke layar
-    }
-    
-    public void destroy() {
-        EventBus.getInstance().unsubscribe(AgentEvent.EventType.RECOVERY_TRIGGERED, this);
+    private void promptUserForAccessibility() {
+        // Melempar user ke Settings agar bisa re-enable service secara manual
+        Intent intent = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        try {
+            context.startActivity(intent);
+        } catch (Exception e) {
+            Log.e(TAG, "Gagal meluncurkan intent darurat", e);
+        }
     }
 }

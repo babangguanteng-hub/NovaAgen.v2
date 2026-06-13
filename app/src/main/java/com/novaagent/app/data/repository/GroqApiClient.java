@@ -2,6 +2,10 @@ package com.novaagent.app.data.repository;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.os.Handler;
+import android.os.Looper;
+import android.util.Log;
+
 import org.json.JSONArray;
 import org.json.JSONObject;
 import java.io.IOException;
@@ -15,15 +19,17 @@ import okhttp3.RequestBody;
 import okhttp3.Response;
 
 public class GroqApiClient {
+    private static final String TAG = "GroqApiClient";
     private static final String API_URL = "https://api.groq.com/openai/v1/chat/completions";
-    
-    // ========================================================
-    // 🔥 INI DIA KUNCINYA: KITA PAKAI MODEL TERBARU YANG AKTIF
-    // ========================================================
     private static final String MODEL_NAME = "llama-3.1-8b-instant"; 
     
     private final OkHttpClient client;
     private final Context context;
+    private final Handler retryHandler;
+
+    // Konfigurasi Retry
+    private static final int MAX_RETRIES = 3;
+    private static final long BASE_DELAY_MS = 1500; // Jeda awal 1.5 detik
 
     public interface GroqCallback {
         void onSuccess(String jsonResponse);
@@ -32,14 +38,21 @@ public class GroqApiClient {
 
     public GroqApiClient(Context context) {
         this.context = context;
+        this.retryHandler = new Handler(Looper.getMainLooper());
+        
+        // Timeout ketat untuk Android Go agar thread tidak tersandera lama
         client = new OkHttpClient.Builder()
-                .connectTimeout(15, TimeUnit.SECONDS)
-                .readTimeout(30, TimeUnit.SECONDS)
-                .writeTimeout(15, TimeUnit.SECONDS)
+                .connectTimeout(10, TimeUnit.SECONDS)
+                .readTimeout(20, TimeUnit.SECONDS)
+                .writeTimeout(10, TimeUnit.SECONDS)
                 .build();
     }
 
     public void sendPrompt(String systemPrompt, String userPrompt, GroqCallback callback) {
+        executeRequestWithRetry(systemPrompt, userPrompt, callback, 0);
+    }
+
+    private void executeRequestWithRetry(String systemPrompt, String userPrompt, GroqCallback callback, int retryCount) {
         SharedPreferences prefs = context.getSharedPreferences("nova_config", Context.MODE_PRIVATE);
         String apiKey = prefs.getString("groq_api_key", "").trim();
 
@@ -52,8 +65,6 @@ public class GroqApiClient {
             JSONObject payload = new JSONObject();
             payload.put("model", MODEL_NAME);
             payload.put("temperature", 0.5); 
-            
-            // Kita tetap biarkan mode bebas (tanpa response_format) agar tidak kena HTTP 400
 
             JSONArray messages = new JSONArray();
             JSONObject systemMsg = new JSONObject();
@@ -69,8 +80,6 @@ public class GroqApiClient {
             payload.put("messages", messages);
 
             RequestBody body = RequestBody.create(payload.toString(), MediaType.parse("application/json; charset=utf-8"));
-            
-            // Topeng Penyamaran Samsung tetap kita pasang agar kebal blokir
             Request request = new Request.Builder()
                     .url(API_URL)
                     .addHeader("Authorization", "Bearer " + apiKey)
@@ -82,18 +91,27 @@ public class GroqApiClient {
             client.newCall(request).enqueue(new Callback() {
                 @Override
                 public void onFailure(Call call, IOException e) {
-                    callback.onError("Koneksi Internet Terputus!");
+                    handleRetry("Koneksi Internet Terputus/RTO", systemPrompt, userPrompt, callback, retryCount);
                 }
+
                 @Override
                 public void onResponse(Call call, Response response) throws IOException {
                     if (!response.isSuccessful()) {
+                        int code = response.code();
                         String errorBody = response.body() != null ? response.body().string() : "";
-                        String exactError = "HTTP " + response.code();
+                        String exactError = "HTTP " + code;
                         try {
                             JSONObject errObj = new JSONObject(errorBody);
                             exactError = errObj.getJSONObject("error").getString("message");
                         } catch (Exception ignored) {}
-                        callback.onError(exactError);
+
+                        // Jika kena Rate Limit (429) atau Server Error (5xx), lakukan RETRY
+                        if (code == 429 || code >= 500) {
+                            handleRetry("Server sibuk (" + code + "): " + exactError, systemPrompt, userPrompt, callback, retryCount);
+                        } else {
+                            // Error 400 atau 401/403 biasanya cacat logika/kunci, jangan di-retry
+                            callback.onError(exactError);
+                        }
                         return;
                     }
                     try {
@@ -110,7 +128,25 @@ public class GroqApiClient {
                 }
             });
         } catch (Exception e) {
-            callback.onError("Error Sistem Lokal.");
+            callback.onError("Error Sistem Lokal saat menyusun Request.");
+        }
+    }
+
+    private void handleRetry(String errorReason, String systemPrompt, String userPrompt, GroqCallback callback, int currentRetryCount) {
+        if (currentRetryCount < MAX_RETRIES) {
+            int nextRetry = currentRetryCount + 1;
+            // Exponential Backoff: Jeda = BaseDelay * (2 ^ currentRetry)
+            // Retry 1: 1.5s | Retry 2: 3.0s | Retry 3: 6.0s
+            long delay = BASE_DELAY_MS * (long) Math.pow(2, currentRetryCount);
+            
+            Log.w(TAG, "Request Gagal: " + errorReason + ". Mencoba ulang (" + nextRetry + "/" + MAX_RETRIES + ") dalam " + delay + "ms...");
+            
+            retryHandler.postDelayed(() -> {
+                executeRequestWithRetry(systemPrompt, userPrompt, callback, nextRetry);
+            }, delay);
+        } else {
+            Log.e(TAG, "Gagal total setelah " + MAX_RETRIES + " kali percobaan. Menyerah.");
+            callback.onError(errorReason + " (Gagal setelah 3x coba)");
         }
     }
 }

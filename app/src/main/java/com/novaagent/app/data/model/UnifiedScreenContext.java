@@ -1,66 +1,68 @@
 package com.novaagent.app.data.model;
 
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
-
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Penggabungan hasil antara Accessibility Tree (Struktur UI Native) dan ML Kit OCR (Teks Gambar).
- * Dikonversi menjadi DTO agar mudah dievaluasi oleh SafetyEngine dan LLM Groq.
+ * DTO Murni untuk merepresentasikan status layar HP pada satu waktu (Timestamp).
+ * SANGAT DILARANG menyimpan referensi AccessibilityNodeInfo di sini untuk mencegah OOM.
  */
 public class UnifiedScreenContext {
     public final String packageName;
-    public final long timestamp;
+    public final long timestampMs;
     public final List<ScreenElement> elements;
 
-    public UnifiedScreenContext(String packageName, JSONArray accessibilityNodes, JSONArray ocrNodes) {
+    public UnifiedScreenContext(String packageName, long timestampMs, List<ScreenElement> elements) {
         this.packageName = packageName != null ? packageName : "unknown";
-        this.timestamp = System.currentTimeMillis();
-        this.elements = new ArrayList<>();
-        
-        parseJsonArray(accessibilityNodes, "accessibility");
-        parseJsonArray(ocrNodes, "ocr");
-    }
-
-    private void parseJsonArray(JSONArray array, String source) {
-        if (array == null) return;
-        for (int i = 0; i < array.length(); i++) {
-            try {
-                JSONObject obj = array.getJSONObject(i);
-                elements.add(new ScreenElement(obj, source));
-            } catch (JSONException e) {
-                // Abaikan elemen yang error
-            }
-        }
+        this.timestampMs = timestampMs;
+        // Membuat salinan list (Defensive Copy) agar aman dari modifikasi thread lain
+        this.elements = elements != null ? new ArrayList<>(elements) : new ArrayList<>();
     }
 
     /**
-     * Helper untuk SafetyPolicyEngine mencari teks di koordinat spesifik.
+     * Helper untuk SafetyPolicyEngine: Mengambil teks murni pada koordinat tertentu.
      */
     public String getTextAtCoordinate(int x, int y) {
         for (ScreenElement el : elements) {
-            // Pengecekan hit-box sederhana dengan toleransi 50 pixel
-            if (Math.abs(el.cx - x) < 50 && Math.abs(el.cy - y) < 50) {
+            if (x >= el.boundsLeft && x <= el.boundsRight && y >= el.boundsTop && y <= el.boundsBottom) {
                 return el.text;
             }
         }
         return null;
     }
 
+    /**
+     * Representasi Primitif dari elemen layar (Bebas dari OS Binder/C++).
+     * Didesain agar bisa di-reuse oleh ObjectPool.
+     */
     public static class ScreenElement {
-        public final String text;
-        public final int cx;
-        public final int cy;
-        public final String source;
+        public String type; // "Button", "Input", "Text"
+        public String text;
+        public int boundsLeft, boundsTop, boundsRight, boundsBottom;
+        public int centerX, centerY;
 
-        public ScreenElement(JSONObject obj, String source) {
-            this.text = obj.optString("text", obj.optString("contentDescription", ""));
-            this.cx = obj.optInt("cx", -1);
-            this.cy = obj.optInt("cy", -1);
-            this.source = source;
+        // Constructor kosong untuk keperluan ObjectPool
+        public ScreenElement() {}
+
+        public void reset() {
+            this.type = null;
+            this.text = null;
+            this.boundsLeft = this.boundsTop = this.boundsRight = this.boundsBottom = 0;
+            this.centerX = this.centerY = 0;
         }
+
+        @Override
+        public String toString() {
+            return "[" + type + "] \"" + text + "\" center(" + centerX + "," + centerY + ")";
+        }
+    }
+
+    @Override
+    public String toString() {
+        StringBuilder sb = new StringBuilder();
+        for (ScreenElement el : elements) {
+            sb.append(el.toString()).append("\n");
+        }
+        return sb.toString();
     }
 }

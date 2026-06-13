@@ -1,64 +1,60 @@
 package com.novaagent.app.infrastructure.system;
 
+import android.os.Handler;
+import android.os.HandlerThread;
+import android.os.SystemClock;
 import android.util.Log;
-
 import com.novaagent.app.core.bus.AgentEvent;
 import com.novaagent.app.core.bus.EventBus;
 
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
-
 /**
- * NovaWatchdog memantau kesehatan komponen sistem setiap 5 detik.
- * Jika menemukan anomali (misal waktu tunggu terlalu lama), ia akan memicu RecoveryManager.
+ * Detak Jantung Sistem. 
+ * Memastikan setiap komponen penting tetap "hidup". 
+ * Jika tidak ada 'ping' dalam 15 detik, sistem dianggap Deadlocked.
  */
 public class NovaWatchdog {
     private static final String TAG = "NovaWatchdog";
-    private final ScheduledExecutorService scheduler;
+    private static final long HEARTBEAT_INTERVAL = 5000;
+    private static final long TIMEOUT_THRESHOLD = 15000;
     
-    private long lastAccessibilityHeartbeat = 0;
-    private long lastLoopEngineActivity = 0;
-    
-    private static final long MAX_ACCESSIBILITY_DEAD_TIME_MS = 15000; // 15 detik
+    private HandlerThread watchdogThread;
+    private Handler handler;
+    private long lastHeartbeatTime = 0;
+    private boolean isRunning = false;
 
-    public NovaWatchdog() {
-        scheduler = Executors.newSingleThreadScheduledExecutor();
-    }
-
-    public void startMonitoring() {
-        Log.d(TAG, "NovaWatchdog mulai berpatroli...");
-        updateHeartbeat();
+    public void start() {
+        if (isRunning) return;
+        watchdogThread = new HandlerThread("WatchdogThread");
+        watchdogThread.start();
+        handler = new Handler(watchdogThread.getLooper());
+        isRunning = true;
         
-        // Cek kesehatan setiap 5 detik
-        scheduler.scheduleAtFixedRate(this::checkSystemHealth, 5, 5, TimeUnit.SECONDS);
+        lastHeartbeatTime = SystemClock.elapsedRealtime();
+        handler.post(watchdogRunnable);
     }
 
-    public void updateHeartbeat() {
-        lastAccessibilityHeartbeat = System.currentTimeMillis();
-        lastLoopEngineActivity = System.currentTimeMillis();
+    public void stop() {
+        isRunning = false;
+        if (watchdogThread != null) watchdogThread.quitSafely();
     }
 
-    private void checkSystemHealth() {
-        long now = System.currentTimeMillis();
-        
-        // 1. Cek apakah Accessibility Service mati (di-kill OS)
-        if (now - lastAccessibilityHeartbeat > MAX_ACCESSIBILITY_DEAD_TIME_MS) {
-            Log.e(TAG, "WATCHDOG ALERT: Accessibility Service tidak merespon (Mati)!");
-            triggerRecovery("ACCESSIBILITY_KILLED");
-            // Reset heartbeat agar tidak looping spam recovery
-            lastAccessibilityHeartbeat = now; 
+    // Dipanggil oleh Service/Engine sebagai bukti "Saya masih bekerja"
+    public void ping() {
+        lastHeartbeatTime = SystemClock.elapsedRealtime();
+    }
+
+    private final Runnable watchdogRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (!isRunning) return;
+            
+            long currentTime = SystemClock.elapsedRealtime();
+            if (currentTime - lastHeartbeatTime > TIMEOUT_THRESHOLD) {
+                Log.e(TAG, "CRITICAL: Jantung aplikasi berhenti! Memicu Protokol Recovery.");
+                // Mengirim sinyal darurat ke RecoveryManager
+                EventBus.getInstance().publish(new AgentEvent(AgentEvent.EventType.RECOVERY_TRIGGERED, 3));
+            }
+            handler.postDelayed(this, HEARTBEAT_INTERVAL);
         }
-    }
-
-    private void triggerRecovery(String reason) {
-        EventBus.getInstance().publish(new AgentEvent(AgentEvent.EventType.RECOVERY_TRIGGERED, reason));
-    }
-
-    public void stopMonitoring() {
-        if (scheduler != null && !scheduler.isShutdown()) {
-            scheduler.shutdownNow();
-            Log.d(TAG, "NovaWatchdog berhenti berpatroli.");
-        }
-    }
+    };
 }

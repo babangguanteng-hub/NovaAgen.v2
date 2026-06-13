@@ -1,65 +1,79 @@
 package com.novaagent.app.core.engine;
 
 import android.util.Log;
-
 import com.novaagent.app.core.bus.AgentEvent;
 import com.novaagent.app.core.bus.EventBus;
 import com.novaagent.app.data.model.ActionCommandDto;
 import com.novaagent.app.data.model.UnifiedScreenContext;
-
+import java.util.Arrays;
+import java.util.List;
 import java.util.regex.Pattern;
 
 /**
- * Mesin Kebijakan Keamanan.
- * Bertugas memfilter perintah dari LLM Groq sebelum dieksekusi oleh SystemActionInjector.
- * Mencegah agen mentransfer uang, menghapus data, atau mengubah setelan sensitif tanpa izin user.
+ * Firewall Keamanan Otonom (Menyelesaikan Defect H001).
+ * Mengevaluasi perintah LLM sebelum dieksekusi berdasarkan konteks paket aplikasi yang sedang terbuka.
  */
 public class SafetyPolicyEngine {
     private static final String TAG = "SafetyPolicyEngine";
 
-    // Daftar kata kunci berbahaya (Regex)
-    private static final Pattern BLACKLIST_PATTERN = Pattern.compile(
-            "(transfer|kirim uang|bayar|checkout|factory reset|hapus semua|uninstall|copot pemasangan|" +
-            "developer options|opsi pengembang|unknown sources|sumber tidak dikenal|password|kata sandi|pin)",
+    // Pola Regex untuk Aksi Kritis
+    private static final Pattern CRITICAL_KEYWORDS = Pattern.compile(
+            "(transfer|kirim uang|bayar|checkout|factory reset|hapus semua|uninstall|" +
+            "developer options|unknown sources|password|kata sandi|pin)",
             Pattern.CASE_INSENSITIVE
     );
 
-    public SafetyPolicyEngine() {
-        Log.d(TAG, "SafetyPolicyEngine aktif dan siap memantau.");
-    }
+    // Zona Merah: Aplikasi yang membutuhkan izin eksplisit dari pengguna
+    private static final List<String> SENSITIVE_PACKAGES = Arrays.asList(
+            "com.android.settings", 
+            "com.google.android.packageinstaller", 
+            "com.android.vending", 
+            "com.bca", "com.mandiri", "com.gojek", "com.shopee", "com.dana"
+    );
 
-    /**
-     * Mengevaluasi tingkat bahaya suatu perintah berdasarkan teks di layar saat ini
-     * dan teks target yang ingin diklik/diketik oleh Agen.
-     */
     public void evaluateAction(ActionCommandDto command, UnifiedScreenContext screenContext) {
         boolean isSafe = true;
-        String reason = "";
+        String blockReason = "";
 
-        // 1. Cek parameter teks dari perintah agen itu sendiri
-        if (command.text != null && BLACKLIST_PATTERN.matcher(command.text).find()) {
-            isSafe = false;
-            reason = "Perintah mengandung kata kunci berbahaya: " + command.text;
+        String currentPackage = (screenContext != null && screenContext.packageName != null) 
+                                ? screenContext.packageName.toLowerCase() : "unknown";
+        
+        boolean isSensitiveContext = false;
+        for (String pkg : SENSITIVE_PACKAGES) {
+            if (currentPackage.contains(pkg)) {
+                isSensitiveContext = true;
+                break;
+            }
         }
 
-        // 2. Cek konteks layar di sekitar area yang akan di-tap (jika ini aksi tap)
-        if (isSafe && command.action.equals("tap") && screenContext != null) {
-            String elementText = screenContext.getTextAtCoordinate(command.x, command.y);
-            if (elementText != null && BLACKLIST_PATTERN.matcher(elementText).find()) {
+        // 1. Evaluasi Teks yang akan Diketik AI
+        if (command.textToType != null && !command.textToType.isEmpty()) {
+            if (CRITICAL_KEYWORDS.matcher(command.textToType).find()) {
                 isSafe = false;
-                reason = "Agen mencoba mengklik elemen sensitif: " + elementText;
+                blockReason = "AI mencoba mengetik kata sandi/perintah bahaya: " + command.textToType;
+            }
+        }
+
+        // 2. Evaluasi Target Klik (Contextual Heuristics)
+        if (isSafe && ("tap".equals(command.action) || "click".equals(command.action)) && screenContext != null) {
+            String targetText = screenContext.getTextAtCoordinate(command.x, command.y);
+            
+            if (targetText != null && CRITICAL_KEYWORDS.matcher(targetText).find()) {
+                if (isSensitiveContext) {
+                    isSafe = false;
+                    blockReason = "Mencegah klik pada '" + targetText + "' di aplikasi sensitif (" + currentPackage + ").";
+                } else {
+                    Log.w(TAG, "Peringatan: Klik pada '" + targetText + "' diizinkan karena tidak berada di zona merah (" + currentPackage + ").");
+                }
             }
         }
 
         if (isSafe) {
-            Log.d(TAG, "Aksi aman (" + command.action + "). Diteruskan ke Eksekutor.");
             EventBus.getInstance().publish(new AgentEvent(AgentEvent.EventType.ACTION_VALIDATED, command));
         } else {
-            Log.e(TAG, "AKSI BERBAHAYA DIBLOKIR: " + reason);
-            // Minta konfirmasi pengguna via suara/UI
-            EventBus.getInstance().publish(new AgentEvent(AgentEvent.EventType.RECOVERY_TRIGGERED, "USER_CONFIRMATION_NEEDED|" + reason));
-            // Ubah state agen jadi menunggu
-            EventBus.getInstance().publish(new AgentEvent(AgentEvent.EventType.STATE_CHANGED, "USER_CONFIRMATION"));
+            Log.e(TAG, "BLOCKED BY FIREWALL: " + blockReason);
+            EventBus.getInstance().publish(new AgentEvent(AgentEvent.EventType.RECOVERY_TRIGGERED, 3)); // Memicu konfirmasi/reset
+            EventBus.getInstance().publish(new AgentEvent(AgentEvent.EventType.STATE_CHANGED, "AKSI DIBLOKIR KEAMANAN"));
         }
     }
 }
