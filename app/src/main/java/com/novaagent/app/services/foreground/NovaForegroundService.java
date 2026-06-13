@@ -19,6 +19,7 @@ import com.novaagent.app.core.engine.AutonomousLoopEngine;
 import com.novaagent.app.data.cache.ScreenCache;
 import com.novaagent.app.infrastructure.ocr.MlKitOcrEngine;
 import com.novaagent.app.infrastructure.system.NovaWatchdog;
+import com.novaagent.app.infrastructure.system.NovaVoiceEngine;
 import com.novaagent.app.ui.bubble.FloatingBubbleView;
 
 public class NovaForegroundService extends Service {
@@ -27,21 +28,25 @@ public class NovaForegroundService extends Service {
     private MediaProjectionWrapper mediaProjectionWrapper;
     private NovaWatchdog watchdog;
     private AutonomousLoopEngine loopEngine;
+    private NovaVoiceEngine voiceEngine;
 
     @Override
     public void onCreate() {
         super.onCreate();
         createNotificationChannel();
         
-        // MENGHIDUPKAN OTAK AI (Fix: "Otak Belum Siap")
+        // 1. Hidupkan Mesin Suara (Pita Suara)
+        voiceEngine = new NovaVoiceEngine(this);
+
+        // 2. Hidupkan Otak AI
         loopEngine = new AutonomousLoopEngine(this);
         ServiceLocator.getInstance().register(AutonomousLoopEngine.class, loopEngine);
 
-        // Menampilkan UI Bubble
+        // 3. Tampilkan UI
         floatingBubbleView = new FloatingBubbleView(this);
         floatingBubbleView.show();
 
-        // Menghidupkan Watchdog
+        // 4. Hidupkan Watchdog
         watchdog = new NovaWatchdog();
         watchdog.start();
         ServiceLocator.getInstance().register(NovaWatchdog.class, watchdog);
@@ -83,6 +88,7 @@ public class NovaForegroundService extends Service {
         if (mediaProjectionWrapper != null) mediaProjectionWrapper.stop();
         if (watchdog != null) watchdog.stop();
         if (loopEngine != null) loopEngine.stopTask();
+        if (voiceEngine != null) voiceEngine.shutdown(); // Matikan suara
         
         ServiceLocator.getInstance().register(NovaWatchdog.class, null);
         ServiceLocator.getInstance().register(MediaProjectionWrapper.class, null);
