@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/bubbleRoot"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@drawable/bg_bubble_cyber"
+    android:padding="16dp"
+    android:gravity="center"
+    android:elevation="8dp">
+
+    <TextView
+        android:id="@+id/tvStatus"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="NOVA: IDLE"
+        android:textColor="#00E5FF"
+        android:textStyle="bold"
+        android:textSize="14sp"
+        android:layout_marginBottom="12dp"/>
+
+    <Button
+        android:id="@+id/btnAction"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="JALANKAN"
+        android:backgroundTint="#00E5FF"
+        android:textColor="#000000"
+        android:textStyle="bold" />
+
+</LinearLayout>
