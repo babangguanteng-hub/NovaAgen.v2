@@ -15,6 +15,7 @@ import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
 
 import com.novaagent.app.core.di.ServiceLocator;
+import com.novaagent.app.core.engine.AutonomousLoopEngine;
 import com.novaagent.app.data.cache.ScreenCache;
 import com.novaagent.app.infrastructure.ocr.MlKitOcrEngine;
 import com.novaagent.app.infrastructure.system.NovaWatchdog;
@@ -25,17 +26,22 @@ public class NovaForegroundService extends Service {
     private FloatingBubbleView floatingBubbleView;
     private MediaProjectionWrapper mediaProjectionWrapper;
     private NovaWatchdog watchdog;
+    private AutonomousLoopEngine loopEngine;
 
     @Override
     public void onCreate() {
         super.onCreate();
         createNotificationChannel();
         
-        // 1. Tampilkan Bubble UI (Sekarang hanya butuh 1 parameter: Context)
+        // MENGHIDUPKAN OTAK AI (Fix: "Otak Belum Siap")
+        loopEngine = new AutonomousLoopEngine(this);
+        ServiceLocator.getInstance().register(AutonomousLoopEngine.class, loopEngine);
+
+        // Menampilkan UI Bubble
         floatingBubbleView = new FloatingBubbleView(this);
         floatingBubbleView.show();
 
-        // 2. Hidupkan Sistem Imun (Watchdog)
+        // Menghidupkan Watchdog
         watchdog = new NovaWatchdog();
         watchdog.start();
         ServiceLocator.getInstance().register(NovaWatchdog.class, watchdog);
@@ -43,17 +49,14 @@ public class NovaForegroundService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        // Wajib untuk Android 8.0+: Menampilkan notifikasi agar layanan tidak dibunuh OS
         Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID)
-                .setContentTitle("Nova Agent Aktif")
-                .setContentText("Sistem Otonom Berjalan di Latar Belakang")
-                .setSmallIcon(android.R.drawable.ic_menu_camera) // Menggunakan ikon bawaan OS
+                .setContentTitle("Nova Agent")
+                .setContentText("Sistem Otonom Berjalan")
+                .setSmallIcon(android.R.drawable.ic_menu_camera)
                 .setPriority(NotificationCompat.PRIORITY_LOW)
                 .build();
-
         startForeground(1, notification);
 
-        // 3. Tangkap Token Tangkapan Layar dari MainActivity
         if (intent != null && intent.getIntExtra("code", 0) != 0) {
             int resultCode = intent.getIntExtra("code", 0);
             Intent data = intent.getParcelableExtra("data");
@@ -62,21 +65,15 @@ public class NovaForegroundService extends Service {
                 MediaProjectionManager projectionManager = (MediaProjectionManager) getSystemService(Context.MEDIA_PROJECTION_SERVICE);
                 if (projectionManager != null) {
                     MediaProjection mediaProjection = projectionManager.getMediaProjection(resultCode, data);
-                    
-                    // Merakit Sistem Mata (OCR & Cache)
                     MlKitOcrEngine ocrEngine = new MlKitOcrEngine();
                     ScreenCache screenCache = new ScreenCache();
-                    
                     mediaProjectionWrapper = new MediaProjectionWrapper(this, mediaProjection, ocrEngine, screenCache);
                     mediaProjectionWrapper.start();
-                    
-                    // Daftarkan ke Locator agar bisa dipanggil oleh Otak (LoopEngine)
                     ServiceLocator.getInstance().register(MediaProjectionWrapper.class, mediaProjectionWrapper);
                 }
             }
         }
-
-        return START_STICKY; // Jika dibunuh OS, otomatis dihidupkan lagi
+        return START_STICKY;
     }
 
     @Override
@@ -85,22 +82,20 @@ public class NovaForegroundService extends Service {
         if (floatingBubbleView != null) floatingBubbleView.remove();
         if (mediaProjectionWrapper != null) mediaProjectionWrapper.stop();
         if (watchdog != null) watchdog.stop();
+        if (loopEngine != null) loopEngine.stopTask();
         
-        // Bersihkan memori dari Service Locator
         ServiceLocator.getInstance().register(NovaWatchdog.class, null);
         ServiceLocator.getInstance().register(MediaProjectionWrapper.class, null);
+        ServiceLocator.getInstance().register(AutonomousLoopEngine.class, null);
     }
 
     @Nullable
     @Override
-    public IBinder onBind(Intent intent) {
-        return null; // Kita tidak menggunakan IPC binding standar
-    }
+    public IBinder onBind(Intent intent) { return null; }
 
     private void createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            NotificationChannel channel = new NotificationChannel(
-                    CHANNEL_ID, "Nova Agent Service", NotificationManager.IMPORTANCE_LOW);
+            NotificationChannel channel = new NotificationChannel(CHANNEL_ID, "Nova Agent", NotificationManager.IMPORTANCE_LOW);
             NotificationManager manager = getSystemService(NotificationManager.class);
             if (manager != null) manager.createNotificationChannel(channel);
         }

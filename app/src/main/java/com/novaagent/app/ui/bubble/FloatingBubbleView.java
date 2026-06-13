@@ -2,6 +2,7 @@ package com.novaagent.app.ui.bubble;
 
 import android.content.Context;
 import android.graphics.PixelFormat;
+import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
 import android.view.Gravity;
 import android.view.MotionEvent;
@@ -24,41 +25,50 @@ public class FloatingBubbleView implements EventBus.EventListener {
     public FloatingBubbleView(Context context) {
         this.context = context;
         this.windowManager = (WindowManager) context.getSystemService(Context.WINDOW_SERVICE);
-        
-        // Mendaftar ke EventBus untuk mendengarkan perubahan status AI
         EventBus.getInstance().subscribe(AgentEvent.EventType.STATE_CHANGED, this);
         EventBus.getInstance().subscribe(AgentEvent.EventType.ERROR, this);
-        
         initView();
     }
 
     private void initView() {
         container = new LinearLayout(context);
         container.setOrientation(LinearLayout.VERTICAL);
-        container.setBackgroundColor(0xAA000000); // Hitam transparan
-        container.setPadding(20, 20, 20, 20);
+        container.setPadding(30, 20, 30, 20);
+        container.setGravity(Gravity.CENTER);
+
+        // Desain Bubble Modern (Melingkar/Radius, Cyber Theme)
+        GradientDrawable shape = new GradientDrawable();
+        shape.setShape(GradientDrawable.RECTANGLE);
+        shape.setCornerRadius(50f); // Melengkung Halus
+        shape.setColor(0xDD1E1E1E); // Hitam Elegan (Sedikit transparan)
+        shape.setStroke(3, 0xFF00E5FF); // Garis Pinggir Cyan Neon
+        container.setBackground(shape);
 
         statusText = new TextView(context);
-        statusText.setTextColor(0xFFFFFFFF);
-        statusText.setText("IDLE");
-        statusText.setTextSize(12f);
+        statusText.setTextColor(0xFF00E5FF); // Cyan
+        statusText.setText("NOVA: IDLE");
+        statusText.setTextSize(14f);
+        statusText.setTypeface(null, android.graphics.Typeface.BOLD);
+        statusText.setGravity(Gravity.CENTER);
+        statusText.setPadding(0, 0, 0, 10);
 
         Button actionBtn = new Button(context);
-        actionBtn.setText("NOVA");
+        actionBtn.setText("JALANKAN");
+        actionBtn.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFF00E5FF));
+        actionBtn.setTextColor(0xFF000000);
+        
         actionBtn.setOnClickListener(v -> {
             try {
                 AutonomousLoopEngine engine = ServiceLocator.getInstance().resolve(AutonomousLoopEngine.class);
-                // Contoh hardcoded sementara, nantinya disambungkan ke SpeechRecognizer (Voice)
-                engine.startTask("Carikan video kucing lucu di YouTube"); 
+                engine.startTask("Carikan artikel tentang teknologi AI terbaru hari ini");
             } catch (Exception e) {
-                statusText.setText("Error: Otak Belum Siap");
+                statusText.setText("ERROR: OTAK MATI");
             }
         });
 
         container.addView(statusText);
         container.addView(actionBtn);
 
-        // Menambahkan kemampuan digeser (Drag)
         container.setOnTouchListener(new android.view.View.OnTouchListener() {
             private int initialX, initialY;
             private float initialTouchX, initialTouchY;
@@ -78,7 +88,6 @@ public class FloatingBubbleView implements EventBus.EventListener {
                         windowManager.updateViewLayout(container, params);
                         return true;
                     case MotionEvent.ACTION_UP:
-                        // Jika tidak bergeser jauh, anggap sebagai klik
                         if (Math.abs(event.getRawX() - initialTouchX) < 10 && Math.abs(event.getRawY() - initialTouchY) < 10) {
                             actionBtn.performClick();
                         }
@@ -103,12 +112,9 @@ public class FloatingBubbleView implements EventBus.EventListener {
                 PixelFormat.TRANSLUCENT
         );
         params.gravity = Gravity.TOP | Gravity.START;
-        params.x = 0; params.y = 100;
+        params.x = 20; params.y = 200;
 
-        try {
-            windowManager.addView(container, params);
-            isAdded = true;
-        } catch (Exception e) {}
+        try { windowManager.addView(container, params); isAdded = true; } catch (Exception e) {}
     }
 
     public void remove() {
@@ -122,7 +128,6 @@ public class FloatingBubbleView implements EventBus.EventListener {
 
     @Override
     public void onEvent(AgentEvent event) {
-        // Pembaruan UI selalu aman karena kita melempar event ini di MainLane (UI Thread) EventBus!
         if (event.type == AgentEvent.EventType.STATE_CHANGED || event.type == AgentEvent.EventType.ERROR) {
             if (statusText != null) {
                 statusText.setText(String.valueOf(event.payload));
