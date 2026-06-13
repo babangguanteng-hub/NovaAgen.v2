@@ -12,11 +12,13 @@ import android.os.Handler;
 import android.os.Looper;
 import android.util.DisplayMetrics;
 import android.util.Log;
+
 import com.novaagent.app.core.bus.AgentEvent;
 import com.novaagent.app.core.bus.EventBus;
 import com.novaagent.app.core.di.ServiceLocator;
 import com.novaagent.app.data.model.ActionCommandDto;
 import com.novaagent.app.services.accessibility.NovaAccessibilityService;
+
 import java.util.List;
 
 public class SystemActionInjector {
@@ -44,27 +46,49 @@ public class SystemActionInjector {
 
         boolean success = false;
         switch (cmd.action) {
-            case "open_app": success = openAppByName(service, cmd.textToType); break;
-            case "volume_up": success = adjustVolume(service, AudioManager.ADJUST_RAISE); break;
-            case "volume_down": success = adjustVolume(service, AudioManager.ADJUST_LOWER); break;
-            case "home": success = service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME); break;
-            case "back": success = service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK); break;
-            case "tap": case "click": success = executeTap(service, cmd.x, cmd.y); break;
-            case "swipe": case "scroll": success = executeSwipe(service, cmd.direction); break;
-            case "press_enter":
-                // Resolusi Dinamis: Mengetuk area estimasi tombol "Enter" di pojok kanan bawah keyboard
-                int enterX = (int) (screenWidth * 0.90);
-                int enterY = (int) (screenHeight * 0.90);
-                success = executeTap(service, enterX, enterY);
+            case "open_app": 
+                success = openAppByName(service, cmd.textToType); 
+                break;
+            case "quick_settings": // MENGONTROL PANEL ATAS (WIFI, BLUETOOTH, DLL)
+                success = service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_QUICK_SETTINGS);
+                break;
+            case "notifications": // MEMBUKA NOTIFIKASI
+                success = service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_NOTIFICATIONS);
+                break;
+            case "recent_apps": // MEMBUKA RECENT APPS
+                success = service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_RECENTS);
+                break;
+            case "home": 
+                success = service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME); 
+                break;
+            case "back": 
+                success = service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK); 
+                break;
+            case "tap": 
+            case "click": 
+                success = executeTap(service, cmd.x, cmd.y); 
+                break;
+            case "swipe": 
+            case "scroll": 
+                success = executeSwipe(service, cmd.direction); 
                 break;
             case "type":
-                success = executeTap(service, cmd.x, cmd.y);
-                // Non-Blocking Delay: Tidak pakai Thread.sleep() lagi
+                // LOGIKA PENGETIKAN MANUSIAWI (GHOST TYPING)
+                // 1. Ketuk dulu kolom teksnya agar keyboard muncul
+                executeTap(service, cmd.x, cmd.y);
+                
+                // 2. Tunggu 1 detik sampai animasi keyboard HP selesai, baru masukkan teks
                 delayHandler.postDelayed(() -> {
                     service.typeTextAtCoordinate(cmd.x, cmd.y, cmd.textToType);
-                    EventBus.getInstance().publish(new AgentEvent(AgentEvent.EventType.ACTION_EXECUTED, cmd.action));
-                }, 800);
-                return; // Return awal agar tidak memicu ACTION_EXECUTED ganda di bawah
+                    
+                    // 3. Otomatis menekan "Enter / Search" di pojok kanan bawah keyboard
+                    delayHandler.postDelayed(() -> {
+                        executeTap(service, (int)(screenWidth * 0.90), (int)(screenHeight * 0.90));
+                        EventBus.getInstance().publish(new AgentEvent(AgentEvent.EventType.ACTION_EXECUTED, cmd.action));
+                    }, 800);
+                    
+                }, 1000);
+                return; // Return awal agar tidak memicu ACTION_EXECUTED ganda
             case "done":
                 EventBus.getInstance().publish(new AgentEvent(AgentEvent.EventType.STATE_CHANGED, "TUGAS SELESAI"));
                 return;
@@ -73,30 +97,31 @@ public class SystemActionInjector {
         EventBus.getInstance().publish(new AgentEvent(AgentEvent.EventType.ACTION_EXECUTED, cmd.action));
     }
 
-    private boolean adjustVolume(Context context, int direction) {
-        AudioManager audioManager = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
-        if (audioManager != null) { audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, direction, AudioManager.FLAG_SHOW_UI); return true; }
-        return false;
-    }
-
     private boolean openAppByName(Context context, String appName) {
         if (appName == null || appName.isEmpty()) return false;
         PackageManager pm = context.getPackageManager();
         List<ApplicationInfo> packages = pm.getInstalledApplications(PackageManager.GET_META_DATA);
         for (ApplicationInfo packageInfo : packages) {
-            if (pm.getApplicationLabel(packageInfo).toString().toLowerCase().contains(appName.toLowerCase())) {
+            String label = pm.getApplicationLabel(packageInfo).toString().toLowerCase();
+            if (label.contains(appName.toLowerCase()) || appName.toLowerCase().contains(label)) {
                 Intent intent = pm.getLaunchIntentForPackage(packageInfo.packageName);
-                if (intent != null) { intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); context.startActivity(intent); return true; }
+                if (intent != null) { 
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); 
+                    context.startActivity(intent); 
+                    return true; 
+                }
             }
         }
         return false;
     }
 
+    // MELAKUKAN SENTUHAN FISIK (GHOST TOUCH)
     private boolean executeTap(NovaAccessibilityService service, int x, int y) {
         if (x <= 0 || y <= 0) return false;
-        Path clickPath = new Path(); clickPath.moveTo(x, y);
+        Path clickPath = new Path(); 
+        clickPath.moveTo(x, y);
         GestureDescription.Builder builder = new GestureDescription.Builder();
-        builder.addStroke(new GestureDescription.StrokeDescription(clickPath, 0, 100));
+        builder.addStroke(new GestureDescription.StrokeDescription(clickPath, 0, 100)); // Tekan selama 100ms
         return service.dispatchGesture(builder.build(), null, null);
     }
 
@@ -111,7 +136,7 @@ public class SystemActionInjector {
         else { return false; }
         
         GestureDescription.Builder builder = new GestureDescription.Builder();
-        builder.addStroke(new GestureDescription.StrokeDescription(swipePath, 0, 400));
+        builder.addStroke(new GestureDescription.StrokeDescription(swipePath, 0, 400)); // Geser selama 400ms
         return service.dispatchGesture(builder.build(), null, null);
     }
 }
