@@ -1,6 +1,7 @@
 === PENYEBAB UTAMA MANIFEST MERGER GAGAL ===
 > Task :app:createDebugCompatibleScreenManifests
 > Task :app:extractDeepLinksDebug
+> Task :app:mergeDebugResources
 > Task :app:parseDebugLocalResources
 > Task :app:processDebugMainManifest
 > Task :app:processDebugManifest
@@ -10,27 +11,25 @@
 > Task :app:mergeDebugAssets
 > Task :app:compressDebugAssets
 > Task :app:processDebugJavaRes NO-SOURCE
-> Task :app:mergeDebugJavaResource
 > Task :app:desugarDebugFileDependencies
-> Task :app:mergeDebugJniLibFolders
 > Task :app:processDebugManifestForPackage
 > Task :app:checkDebugDuplicateClasses
+> Task :app:mergeDebugJavaResource
 > Task :app:processDebugResources
 > Task :app:mergeExtDexDebug
 
+> Task :app:compileDebugJavaWithJavac
+/home/runner/work/NovaAgen.v2/NovaAgen.v2/app/src/main/java/com/novaagent/app/data/repository/GroqApiClient.java:58: error: not a statement
+        SharedPreferences try { MasterKey masterKey = new MasterKey.Builder(context).setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build(); prefs = EncryptedSharedPreferences.create(context, "nova_secure_config", masterKey, EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV, EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM); } catch (Exception e) { prefs = null; }
+        ^
+/home/runner/work/NovaAgen.v2/NovaAgen.v2/app/src/main/java/com/novaagent/app/data/repository/GroqApiClient.java:58: error: ';' expected
+        SharedPreferences try { MasterKey masterKey = new MasterKey.Builder(context).setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build(); prefs = EncryptedSharedPreferences.create(context, "nova_secure_config", masterKey, EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV, EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM); } catch (Exception e) { prefs = null; }
+                         ^
+2 errors
+
 > Task :app:compileDebugJavaWithJavac FAILED
-/home/runner/work/NovaAgen.v2/NovaAgen.v2/app/src/main/java/com/novaagent/app/services/foreground/NovaForegroundService.java:39: error: constructor FloatingBubbleView in class FloatingBubbleView cannot be applied to given types;
-        floatingBubbleView = new FloatingBubbleView(this.getApplicationContext(), viewModel);
-                             ^
-  required: Context
-  found:    Context,BubbleViewModel
-  reason: actual and formal argument lists differ in length
-Note: Some input files use or override a deprecated API.
-Note: Recompile with -Xlint:deprecation for details.
-1 error
 
 FAILURE: Build failed with an exception.
 
 * What went wrong:
 Execution failed for task ':app:compileDebugJavaWithJavac'.
-> Compilation failed; see the compiler error output for details.
