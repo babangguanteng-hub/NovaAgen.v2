@@ -15,11 +15,15 @@ import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
 
 import com.novaagent.app.core.di.ServiceLocator;
+import com.novaagent.app.core.engine.ActionVerificationScore;
 import com.novaagent.app.core.engine.AutonomousLoopEngine;
+import com.novaagent.app.core.engine.SafetyPolicyEngine;
 import com.novaagent.app.data.cache.ScreenCache;
+import com.novaagent.app.data.repository.GroqApiClient;
+import com.novaagent.app.infrastructure.injector.SystemActionInjector;
 import com.novaagent.app.infrastructure.ocr.MlKitOcrEngine;
-import com.novaagent.app.infrastructure.system.NovaWatchdog;
 import com.novaagent.app.infrastructure.system.NovaVoiceEngine;
+import com.novaagent.app.infrastructure.system.NovaWatchdog;
 import com.novaagent.app.ui.bubble.FloatingBubbleView;
 
 public class NovaForegroundService extends Service {
@@ -35,28 +39,35 @@ public class NovaForegroundService extends Service {
         super.onCreate();
         createNotificationChannel();
         
-        // 1. Hidupkan Mesin Suara (Pita Suara)
+        // --- 1. MEREGISTRASIKAN SELURUH KETERGANTUNGAN SISTEM (RESOLUSI C001) ---
+        ServiceLocator locator = ServiceLocator.getInstance();
+        locator.register(GroqApiClient.class, new GroqApiClient(this));
+        locator.register(SystemActionInjector.class, new SystemActionInjector(this));
+        locator.register(SafetyPolicyEngine.class, new SafetyPolicyEngine());
+        locator.register(ActionVerificationScore.class, new ActionVerificationScore());
+
+        // 2. Hidupkan Mesin Suara (Pita Suara)
         voiceEngine = new NovaVoiceEngine(this);
 
-        // 2. Hidupkan Otak AI
-        loopEngine = new AutonomousLoopEngine(this);
-        ServiceLocator.getInstance().register(AutonomousLoopEngine.class, loopEngine);
+        // 3. Hidupkan Otak AI (Sekarang instansiasi murni tanpa parameter Context)
+        loopEngine = new AutonomousLoopEngine();
+        locator.register(AutonomousLoopEngine.class, loopEngine);
 
-        // 3. Tampilkan UI
+        // 4. Tampilkan UI Bubble
         floatingBubbleView = new FloatingBubbleView(this);
         floatingBubbleView.show();
 
-        // 4. Hidupkan Watchdog
+        // 5. Hidupkan Pengawas Detak Jantung
         watchdog = new NovaWatchdog();
         watchdog.start();
-        ServiceLocator.getInstance().register(NovaWatchdog.class, watchdog);
+        locator.register(NovaWatchdog.class, watchdog);
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID)
                 .setContentTitle("Nova Agent")
-                .setContentText("Sistem Otonom Berjalan")
+                .setContentText("Sistem Otonom Bersiaga")
                 .setSmallIcon(android.R.drawable.ic_menu_camera)
                 .setPriority(NotificationCompat.PRIORITY_LOW)
                 .build();
@@ -88,11 +99,16 @@ public class NovaForegroundService extends Service {
         if (mediaProjectionWrapper != null) mediaProjectionWrapper.stop();
         if (watchdog != null) watchdog.stop();
         if (loopEngine != null) loopEngine.stopTask();
-        if (voiceEngine != null) voiceEngine.shutdown(); // Matikan suara
+        if (voiceEngine != null) voiceEngine.shutdown();
         
-        ServiceLocator.getInstance().register(NovaWatchdog.class, null);
-        ServiceLocator.getInstance().register(MediaProjectionWrapper.class, null);
-        ServiceLocator.getInstance().register(AutonomousLoopEngine.class, null);
+        ServiceLocator locator = ServiceLocator.getInstance();
+        locator.register(NovaWatchdog.class, null);
+        locator.register(MediaProjectionWrapper.class, null);
+        locator.register(AutonomousLoopEngine.class, null);
+        locator.register(GroqApiClient.class, null);
+        locator.register(SystemActionInjector.class, null);
+        locator.register(SafetyPolicyEngine.class, null);
+        locator.register(ActionVerificationScore.class, null);
     }
 
     @Nullable
