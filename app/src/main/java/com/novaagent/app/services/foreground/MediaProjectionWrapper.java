@@ -73,6 +73,7 @@ public class MediaProjectionWrapper {
             Image image = null;
             try {
                 image = reader.acquireLatestImage();
+                    try { com.novaagent.app.infrastructure.system.NovaWatchdog watchdog = com.novaagent.app.core.di.ServiceLocator.getInstance().resolve(com.novaagent.app.infrastructure.system.NovaWatchdog.class); if (watchdog != null) watchdog.ping(com.novaagent.app.infrastructure.system.NovaWatchdog.PingSource.VISION); } catch (Exception e) {}
                 // HANYA proses jika mesin AI memang sedang meminta data layar (On-Demand)
                 if (image != null && isCaptureRequested) {
                     isCaptureRequested = false; 
@@ -134,5 +135,15 @@ public class MediaProjectionWrapper {
         if (imageReader != null) imageReader.close();
         if (backgroundThread != null) backgroundThread.quitSafely();
         if (mediaProjection != null) mediaProjection.stop();
+    }
+
+    /**
+     * Injected by C003 Remediation: Protokol penyembuhan Level 2
+     */
+    public void rebind() {
+        android.util.Log.w("MediaProjectionWrapper", "Rebinding MediaProjection Surface...");
+        stop();
+        try { Thread.sleep(500); } catch (InterruptedException e) {} // Jeda aman
+        start();
     }
 }

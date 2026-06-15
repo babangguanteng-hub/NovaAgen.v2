@@ -14,6 +14,7 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.Button;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import com.novaagent.app.R;
@@ -21,6 +22,8 @@ import com.novaagent.app.core.bus.AgentEvent;
 import com.novaagent.app.core.bus.EventBus;
 import com.novaagent.app.core.di.ServiceLocator;
 import com.novaagent.app.core.engine.AutonomousLoopEngine;
+import com.novaagent.app.core.state.AgentState;
+import com.novaagent.app.data.model.ActionCommandDto;
 
 import java.util.ArrayList;
 
@@ -29,17 +32,22 @@ public class FloatingBubbleView implements EventBus.EventListener {
     private final WindowManager windowManager;
     private View bubbleView;
     private TextView tvStatus;
+    private LinearLayout llStandardControls;
+    private LinearLayout llConfirmationControls;
     private boolean isAdded = false;
 
-    // Mesin Perekam Suara
     private SpeechRecognizer speechRecognizer;
     private Intent speechIntent;
+    
+    // Memori aksi yang tertahan oleh Firewall
+    private ActionCommandDto pendingCommand = null;
 
     public FloatingBubbleView(Context context) {
         this.context = context;
         this.windowManager = (WindowManager) context.getSystemService(Context.WINDOW_SERVICE);
         EventBus.getInstance().subscribe(AgentEvent.EventType.STATE_CHANGED, this);
         EventBus.getInstance().subscribe(AgentEvent.EventType.ERROR, this);
+        EventBus.getInstance().subscribe(AgentEvent.EventType.ACTION_REQUESTED, this); // Mendengarkan perintah yang ditahan
         initView();
         setupSpeechRecognizer();
     }
@@ -48,7 +56,7 @@ public class FloatingBubbleView implements EventBus.EventListener {
         speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context);
         speechIntent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
         speechIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
-        speechIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "id-ID"); // Bahasa Indonesia
+        speechIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "id-ID");
 
         speechRecognizer.setRecognitionListener(new RecognitionListener() {
             @Override public void onReadyForSpeech(Bundle params) { tvStatus.setText("MENDENGARKAN..."); }
@@ -64,9 +72,8 @@ public class FloatingBubbleView implements EventBus.EventListener {
                     String command = matches.get(0);
                     tvStatus.setText("PERINTAH: " + command);
                     try {
-                        // MENGIRIM PERINTAH SUARA KE OTAK AI
                         AutonomousLoopEngine engine = ServiceLocator.getInstance().resolve(AutonomousLoopEngine.class);
-                        engine.startTask(command);
+                        if (engine != null) engine.startTask(command);
                     } catch (Exception e) {
                         tvStatus.setText("ERROR: OTAK MATI");
                     }
@@ -80,22 +87,44 @@ public class FloatingBubbleView implements EventBus.EventListener {
     private void initView() {
         bubbleView = LayoutInflater.from(context).inflate(R.layout.layout_floating_bubble, null);
         tvStatus = bubbleView.findViewById(R.id.tvStatus);
+        
+        llStandardControls = bubbleView.findViewById(R.id.llStandardControls);
+        llConfirmationControls = bubbleView.findViewById(R.id.llConfirmationControls);
+
         Button btnMic = bubbleView.findViewById(R.id.btnMic);
         Button btnStop = bubbleView.findViewById(R.id.btnStop);
+        Button btnAllow = bubbleView.findViewById(R.id.btnAllow);
+        Button btnDeny = bubbleView.findViewById(R.id.btnDeny);
 
-        // TOMBOL MIC: Mulai mendengarkan perintah
-        btnMic.setOnClickListener(v -> {
-            if (speechRecognizer != null) {
-                speechRecognizer.startListening(speechIntent);
-            }
-        });
+        btnMic.setOnClickListener(v -> { if (speechRecognizer != null) speechRecognizer.startListening(speechIntent); });
 
-        // TOMBOL STOP: Rem darurat mematikan Loop Engine
         btnStop.setOnClickListener(v -> {
             try {
                 AutonomousLoopEngine engine = ServiceLocator.getInstance().resolve(AutonomousLoopEngine.class);
-                engine.stopTask(); // Memutus siklus kesurupan
+                if (engine != null) engine.stopTask();
                 tvStatus.setText("NOVA: DIHENTIKAN");
+                resetUI();
+            } catch (Exception e) {}
+        });
+
+        // Logika Persetujuan Firewall
+        btnAllow.setOnClickListener(v -> {
+            if (pendingCommand != null) {
+                // Loloskan perintah ke Injector
+                EventBus.getInstance().publish(new AgentEvent(AgentEvent.EventType.ACTION_VALIDATED, pendingCommand));
+                pendingCommand = null;
+                resetUI();
+            }
+        });
+
+        btnDeny.setOnClickListener(v -> {
+            // Batalkan tindakan dan matikan AI
+            pendingCommand = null;
+            resetUI();
+            try {
+                AutonomousLoopEngine engine = ServiceLocator.getInstance().resolve(AutonomousLoopEngine.class);
+                if (engine != null) engine.stopTask();
+                EventBus.getInstance().publish(new AgentEvent(AgentEvent.EventType.VOICE_RECEIVED, "Tindakan dibatalkan."));
             } catch (Exception e) {}
         });
 
@@ -124,6 +153,11 @@ public class FloatingBubbleView implements EventBus.EventListener {
         });
     }
 
+    private void resetUI() {
+        llConfirmationControls.setVisibility(View.GONE);
+        llStandardControls.setVisibility(View.VISIBLE);
+    }
+
     public void show() {
         if (isAdded) return;
         int layoutFlag = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O 
@@ -148,20 +182,32 @@ public class FloatingBubbleView implements EventBus.EventListener {
             try { windowManager.removeView(bubbleView); } catch (Exception e) {}
             isAdded = false;
         }
-        if (speechRecognizer != null) {
-            speechRecognizer.destroy();
-        }
+        if (speechRecognizer != null) speechRecognizer.destroy();
         EventBus.getInstance().unsubscribe(AgentEvent.EventType.STATE_CHANGED, this);
         EventBus.getInstance().unsubscribe(AgentEvent.EventType.ERROR, this);
+        EventBus.getInstance().unsubscribe(AgentEvent.EventType.ACTION_REQUESTED, this);
     }
 
     @Override
     public void onEvent(AgentEvent event) {
-        if (event.type == AgentEvent.EventType.STATE_CHANGED || event.type == AgentEvent.EventType.ERROR) {
-            if (tvStatus != null) {
-                // Update UI di Main Thread
-                tvStatus.post(() -> tvStatus.setText(String.valueOf(event.payload)));
+        if (tvStatus == null) return;
+        
+        tvStatus.post(() -> {
+            if (event.type == AgentEvent.EventType.STATE_CHANGED || event.type == AgentEvent.EventType.ERROR) {
+                String state = String.valueOf(event.payload);
+                tvStatus.setText("NOVA: " + state);
+                
+                // Memicu UI Konfirmasi Pengguna
+                if (AgentState.USER_CONFIRMATION.name().equals(state)) {
+                    llStandardControls.setVisibility(View.GONE);
+                    llConfirmationControls.setVisibility(View.VISIBLE);
+                } else if (AgentState.IDLE.name().equals(state) || AgentState.ERROR.name().equals(state)) {
+                    resetUI();
+                }
+            } else if (event.type == AgentEvent.EventType.ACTION_REQUESTED && event.payload instanceof ActionCommandDto) {
+                // Menerima perintah yang ditahan oleh Firewall
+                this.pendingCommand = (ActionCommandDto) event.payload;
             }
-        }
+        });
     }
 }

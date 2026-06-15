@@ -1,80 +1,68 @@
 package com.novaagent.app.data.cache;
 
 import android.graphics.Bitmap;
-import android.graphics.Color;
+import android.util.Log;
 
 /**
- * Filter Visual Layar menggunakan Algoritma pHash (Perceptual Hash) Ekstrem Ringan.
- * Memeriksa apakah gambar layar berubah signifikan sebelum mengumpankannya ke ML Kit.
+ * Filter Visual Layar (Refactored: Resolusi M002)
+ * Menggunakan algoritma Average Hash (AHash) 64-bit untuk mendeteksi perubahan gambar dengan sangat ringan.
  */
 public class ScreenCache {
-    private long lastScreenHash = 0L;
+    private static final String TAG = "ScreenCache";
+    private long lastHash = 0;
 
-    /**
-     * Membandingkan Bitmap baru dengan hash layar sebelumnya.
-     * Mengembalikan TRUE jika layar dianggap sama (statik), FALSE jika berubah.
-     */
-    public boolean isDuplicate(Bitmap currentBitmap) {
-        if (currentBitmap == null || currentBitmap.isRecycled()) return false;
-
-        long currentHash = computeAHash(currentBitmap);
+    public boolean isDuplicateBitmap(Bitmap bitmap) {
+        if (bitmap == null) return false;
         
-        // Cek hamming distance (perbedaan bit). Jika selisih bit <= 2, dianggap gambar sama.
-        int hammingDistance = Long.bitCount(lastScreenHash ^ currentHash);
-        boolean isSame = hammingDistance <= 2;
-
-        if (!isSame) {
-            lastScreenHash = currentHash; // Update cache dengan hash baru
+        long currentHash = computeAHash(bitmap);
+        
+        // Hamming Distance: Berapa banyak bit yang berbeda?
+        // Kita izinkan perbedaan <= 2 bit (Toleransi untuk animasi kecil/jam/kursor)
+        int distance = Long.bitCount(lastHash ^ currentHash);
+        
+        if (distance <= 2 && lastHash != 0) {
+            return true; // Layar dianggap sama persis (Cache HIT)
         }
         
-        return isSame;
+        Log.d(TAG, "Visual berubah (Hamming Distance: " + distance + ")");
+        lastHash = currentHash;
+        return false; // Layar baru (Cache MISS)
     }
 
     public void invalidate() {
-        lastScreenHash = 0L;
+        lastHash = 0;
     }
 
-    /**
-     * Algoritma Average Hash (AHash) Sangat Cepat (O(1) Memory).
-     * Mereduksi bitmap menjadi grid 8x8 secara mental (tanpa alokasi memori baru),
-     * lalu menghitung rata-rata abu-abu (grayscale) untuk menjadi signature 64-bit.
-     */
     private long computeAHash(Bitmap bitmap) {
-        int width = bitmap.getWidth();
-        int height = bitmap.getHeight();
+        // Algoritma O(1) RAM: Perkecil layar HD menjadi 8x8 piksel
+        Bitmap scaled = Bitmap.createScaledBitmap(bitmap, 8, 8, true);
+        int width = scaled.getWidth();
+        int height = scaled.getHeight();
+        int[] pixels = new int[width * height];
+        scaled.getPixels(pixels, 0, width, 0, 0, width, height);
         
-        // Sampling grid 8x8
-        int stepX = Math.max(1, width / 8);
-        int stepY = Math.max(1, height / 8);
-        
-        int[] pixels = new int[64];
-        long totalGray = 0;
-        int idx = 0;
-
-        // Kumpulkan 64 titik sampel
-        for (int y = 0; y < 8; y++) {
-            for (int x = 0; x < 8; x++) {
-                int pxX = Math.min(x * stepX, width - 1);
-                int pxY = Math.min(y * stepY, height - 1);
-                
-                int color = bitmap.getPixel(pxX, pxY);
-                // Ekstrak luminance (grayscale kasar: R+G+B / 3)
-                int gray = ((Color.red(color) + Color.green(color) + Color.blue(color)) / 3);
-                
-                pixels[idx++] = gray;
-                totalGray += gray;
-            }
+        long totalBrightness = 0;
+        for (int pixel : pixels) {
+            int r = (pixel >> 16) & 0xff;
+            int g = (pixel >> 8) & 0xff;
+            int b = pixel & 0xff;
+            totalBrightness += (r + g + b) / 3;
         }
-
-        int avgGray = (int) (totalGray / 64);
-        long hash = 0L;
-
-        // Bangun hash 64-bit: Bit 1 jika lebih terang dari rata-rata, 0 jika lebih gelap
+        
+        long avgBrightness = totalBrightness / 64;
+        long hash = 0;
+        
         for (int i = 0; i < 64; i++) {
-            if (pixels[i] >= avgGray) {
+            int r = (pixels[i] >> 16) & 0xff;
+            int g = (pixels[i] >> 8) & 0xff;
+            int b = pixels[i] & 0xff;
+            long brightness = (r + g + b) / 3;
+            // Jika piksel lebih terang dari rata-rata, set bit menjadi 1
+            if (brightness >= avgBrightness) {
                 hash |= (1L << i);
             }
         }
+        scaled.recycle();
         return hash;
     }
 }

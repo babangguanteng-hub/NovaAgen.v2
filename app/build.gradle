@@ -27,6 +27,9 @@ android {
 }
 
 dependencies {
+    // Jetpack Security (Enkripsi API Key H002)
+    implementation "androidx.security:security-crypto:1.1.0-alpha06"
+
     // UI Dasar
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.10.0'

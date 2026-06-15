@@ -10,29 +10,36 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
+import android.util.Log;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.Toast;
 
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.security.crypto.EncryptedSharedPreferences;
+import androidx.security.crypto.MasterKey;
 
 import com.novaagent.app.R;
 import com.novaagent.app.services.foreground.NovaForegroundService;
 
+/**
+ * Layar Konfigurasi (Refactored: Resolusi H002)
+ * Menggunakan EncryptedSharedPreferences untuk mengamankan API Key dari eksploitasi root.
+ */
 public class MainActivity extends AppCompatActivity {
+    private static final String TAG = "MainActivity";
     private static final int REQUEST_MEDIA_PROJECTION = 1001;
+    
     private MediaProjectionManager projectionManager;
-    private SharedPreferences prefs;
+    private SharedPreferences encryptedPrefs;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         
-        prefs = getSharedPreferences("nova_config", MODE_PRIVATE);
-
-        // Meminta Izin Dasar (Notifikasi & Mikrofon)
+        initSecurePrefs();
         requestBasicPermissions();
 
         // Bind UI
@@ -42,28 +49,28 @@ public class MainActivity extends AppCompatActivity {
         Button btnOverlay = findViewById(R.id.btnOverlay);
         Button btnStart = findViewById(R.id.btnStart);
 
-        // Load API Key lama
-        apiKeyInput.setText(prefs.getString("groq_api_key", ""));
+        // Load API Key (sekarang dibaca dari brankas terenkripsi)
+        if (encryptedPrefs != null) {
+            apiKeyInput.setText(encryptedPrefs.getString("groq_api_key", ""));
+        }
 
         // Simpan API Key
         btnSaveKey.setOnClickListener(v -> {
             String key = apiKeyInput.getText().toString().trim();
             if (key.isEmpty()) {
                 Toast.makeText(this, "API Key tidak boleh kosong!", Toast.LENGTH_SHORT).show();
-            } else {
-                prefs.edit().putString("groq_api_key", key).apply();
-                Toast.makeText(this, "API Key Disimpan!", Toast.LENGTH_SHORT).show();
+            } else if (encryptedPrefs != null) {
+                encryptedPrefs.edit().putString("groq_api_key", key).apply();
+                Toast.makeText(this, "API Key Disimpan dengan Aman (AES-256)!", Toast.LENGTH_SHORT).show();
             }
         });
 
-        // Buka Pengaturan Aksesibilitas
         btnAccessibility.setOnClickListener(v -> {
             Intent intent = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
             startActivity(intent);
             Toast.makeText(this, "Cari 'Nova Otonom AI' dan Aktifkan", Toast.LENGTH_LONG).show();
         });
 
-        // Buka Pengaturan Overlay (Tampil di atas aplikasi lain)
         btnOverlay.setOnClickListener(v -> {
             if (!Settings.canDrawOverlays(this)) {
                 Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + getPackageName()));
@@ -73,8 +80,26 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        // Mulai Layanan Nova
         btnStart.setOnClickListener(v -> checkPermissionsAndStart());
+    }
+
+    private void initSecurePrefs() {
+        try {
+            MasterKey masterKey = new MasterKey.Builder(this)
+                    .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                    .build();
+
+            encryptedPrefs = EncryptedSharedPreferences.create(
+                    this,
+                    "nova_secure_config",
+                    masterKey,
+                    EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                    EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            );
+        } catch (Exception e) {
+            Log.e(TAG, "Gagal membuat EncryptedSharedPreferences. Fallback dicegah demi keamanan.", e);
+            Toast.makeText(this, "Kesalahan Keamanan Perangkat! Gagal mengunci Brankas.", Toast.LENGTH_LONG).show();
+        }
     }
 
     private void requestBasicPermissions() {
@@ -92,7 +117,9 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void checkPermissionsAndStart() {
-        String key = prefs.getString("groq_api_key", "");
+        if (encryptedPrefs == null) return;
+        
+        String key = encryptedPrefs.getString("groq_api_key", "");
         if (key.isEmpty()) {
             Toast.makeText(this, "Harap simpan API Key terlebih dahulu!", Toast.LENGTH_LONG).show();
             return;
@@ -103,7 +130,6 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        // Meminta Izin Tangkapan Layar (Media Projection)
         projectionManager = (MediaProjectionManager) getSystemService(Context.MEDIA_PROJECTION_SERVICE);
         if (projectionManager != null) {
             startActivityForResult(projectionManager.createScreenCaptureIntent(), REQUEST_MEDIA_PROJECTION);

@@ -41,6 +41,7 @@ public class AutonomousLoopEngine implements EventBus.EventListener {
     private ActionCommandDto lastCommandExecuted;
     private int stepCount = 0;
     private int consecutiveFailures = 0;
+    private String lastFlatUiText = "";
 
     public AutonomousLoopEngine() {
         // Bebas dari Context OS (Domain Murni)
@@ -68,6 +69,7 @@ public class AutonomousLoopEngine implements EventBus.EventListener {
         this.lastCommandExecuted = null;
         this.stepCount = 0;
         this.consecutiveFailures = 0;
+        this.lastFlatUiText = "";
         
         Log.i(TAG, "Memulai Misi: " + task);
         EventBus.getInstance().publish(new AgentEvent(AgentEvent.EventType.STATE_CHANGED, AgentState.OBSERVING.name()));
@@ -93,6 +95,7 @@ public class AutonomousLoopEngine implements EventBus.EventListener {
 
     @Override
     public void onEvent(AgentEvent event) {
+        pingWatchdog();
         if (!isRunning) return;
 
         try {
@@ -104,7 +107,7 @@ public class AutonomousLoopEngine implements EventBus.EventListener {
                     // EVALUASI KESALAHAN (Amnesia Loop Breaker)
                     if (lastCommandExecuted != null && lastScreenContext != null) {
                         EventBus.getInstance().publish(new AgentEvent(AgentEvent.EventType.STATE_CHANGED, AgentState.VERIFYING_SCORE.name()));
-                        ActionVerificationResult result = verificationEngine.verify(lastCommandExecuted.action, lastScreenContext, newContext, true);
+                        ActionVerificationResult result = verificationEngine.verify(lastCommandExecuted, lastScreenContext, newContext, true);
                         
                         if (!result.isVerified) {
                             consecutiveFailures++;
@@ -136,6 +139,13 @@ public class AutonomousLoopEngine implements EventBus.EventListener {
                     String flatUiText = newContext.toString();
                     if (flatUiText.length() > 2500) flatUiText = flatUiText.substring(0, 2500);
                     
+                    // M002: Lapis Kedua Visual Cache (OCR Text Deduplication)
+                    if (flatUiText.equals(lastFlatUiText)) {
+                        android.util.Log.i(TAG, "Layar berubah secara piksel, tapi Teks OCR identik. LLM diabaikan untuk hemat API.");
+                        return;
+                    }
+                    lastFlatUiText = flatUiText;
+
                     processWithAI(flatUiText, failedActionToReport);
                     break;
 
@@ -158,6 +168,13 @@ public class AutonomousLoopEngine implements EventBus.EventListener {
             Log.e(TAG, "LoopEngine Critical Error", e);
             stopTask();
         }
+    }
+
+    private void pingWatchdog() {
+        try {
+            com.novaagent.app.infrastructure.system.NovaWatchdog watchdog = com.novaagent.app.core.di.ServiceLocator.getInstance().resolve(com.novaagent.app.infrastructure.system.NovaWatchdog.class);
+            if (watchdog != null) watchdog.ping(com.novaagent.app.infrastructure.system.NovaWatchdog.PingSource.ENGINE);
+        } catch (Exception e) {}
     }
 
     private void processWithAI(String uiContextString, String failedAction) {
